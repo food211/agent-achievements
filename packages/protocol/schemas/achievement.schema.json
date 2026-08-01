@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-achievements.dev/schemas/v1/achievement.schema.json",
+  "title": "Achievement definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "achievement_id", "title", "intent", "mode", "condition", "evidence_required", "tracking"],
+  "properties": {
+    "schema_version": { "const": "agent-achievements/v1" },
+    "achievement_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,63}$" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "intent": { "type": "string", "minLength": 1, "maxLength": 400 },
+    "mode": { "enum": ["automatic", "claim_review", "human_only"] },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_types", "target", "unit"],
+      "properties": {
+        "event_types": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "event.schema.json#/$defs/eventType" }
+        },
+        "target": { "type": "integer", "minimum": 1 },
+        "unit": { "enum": ["events", "qualified_tasks", "distinct_runs"] }
+      }
+    },
+    "evidence_required": { "type": "boolean" },
+    "tracking": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed", "encouragement", "guardrails"],
+      "properties": {
+        "allowed": { "type": "boolean" },
+        "encouragement": { "type": "string", "maxLength": 400 },
+        "guardrails": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+        }
+      }
+    },
+    "extensions": { "type": "object" }
+  }
+}
+

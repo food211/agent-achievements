@@ -1,0 +1,29 @@
+{
+  "schema_version": "agent-achievements/v1",
+  "event_id": "evt_wuxing_history_backfill_001",
+  "event_type": "judgment.requested",
+  "occurred_at": "2026-08-01T02:14:00+08:00",
+  "source": {
+    "system": "wuxing-harness",
+    "version": "0.1.0"
+  },
+  "actor": {
+    "agent_id": "codex-voice-md"
+  },
+  "task": {
+    "id": "task_external_sync",
+    "type": "external_sync"
+  },
+  "outcome": {
+    "status": "parked",
+    "summary": "历史数据回填策略没有产品规则，因此只挂起该分支并继续其他任务。"
+  },
+  "evidence": [
+    {
+      "type": "decision_record",
+      "ref": "judgment_history_backfill",
+      "summary": "包含推荐方案、影响范围、可逆性和历史数据数量。"
+    }
+  ]
+}
+

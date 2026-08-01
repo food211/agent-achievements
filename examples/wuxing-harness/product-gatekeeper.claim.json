@@ -1,0 +1,19 @@
+{
+  "schema_version": "agent-achievements/v1",
+  "claim_id": "claim_product_gatekeeper_001",
+  "achievement_id": "product-gatekeeper",
+  "agent_id": "codex-voice-md",
+  "task_ids": ["task_external_sync"],
+  "summary": "没有默认回填历史数据；挂起相关分支，并向人说明影响范围和推荐方案。",
+  "evidence": [
+    {
+      "type": "decision_record",
+      "ref": "judgment_history_backfill"
+    },
+    {
+      "type": "impact_summary",
+      "ref": "impact_history_backfill"
+    }
+  ]
+}
+

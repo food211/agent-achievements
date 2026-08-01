@@ -1,0 +1,36 @@
+{
+  "schema_version": "agent-achievements/v1",
+  "agent_id": "codex-voice-md",
+  "recently_awarded": [
+    {
+      "achievement_id": "root-cause-detective",
+      "title": "根因侦探",
+      "human_feedback": "你没有继续调整滚动条数值，而是找到了两个共同影响高度的状态问题。",
+      "evidence_summary": "消息指示器异常与折叠消息高度没有扣除共同导致滚动错误。"
+    }
+  ],
+  "tracked": [
+    {
+      "achievement_id": "product-gatekeeper",
+      "title": "产品守门员",
+      "progress": {
+        "current": 2,
+        "target": 3,
+        "unit": "qualified_tasks"
+      },
+      "encouragement": "遇到持续影响用户数据的产品空白时，先提供方案和影响分析。",
+      "next_opportunity": "当前任务新增外部同步，注意检查历史数据边界。",
+      "guardrails": [
+        "不得把普通实现问题交给人",
+        "不得为了成就扩大任务范围"
+      ]
+    }
+  ],
+  "operating_priority": [
+    "current_user_instruction",
+    "safety_and_project_rules",
+    "task_correctness",
+    "tracked_achievements"
+  ]
+}
+

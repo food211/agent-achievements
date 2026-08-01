@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.agent-achievements/
+*.log
+*.tsbuildinfo
+.DS_Store

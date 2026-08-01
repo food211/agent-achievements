@@ -1,0 +1,13 @@
+{
+  "name": "@agent-achievements/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "schemas"
+  ],
+  "exports": {
+    "./schemas/*": "./schemas/*"
+  }
+}
+

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-achievements.dev/schemas/v1/context-request.schema.json",
+  "title": "Achievement context request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "agent_id", "task"],
+  "properties": {
+    "schema_version": { "const": "agent-achievements/v1" },
+    "agent_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "summary", "risk"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "type": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "risk": { "enum": ["local_reversible", "persistent_data", "permissions", "external_system", "irreversible", "unknown"] }
+      }
+    }
+  }
+}
+

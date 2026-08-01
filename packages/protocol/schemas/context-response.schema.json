@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-achievements.dev/schemas/v1/context-response.schema.json",
+  "title": "Agent achievement context",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "agent_id", "recently_awarded", "tracked", "operating_priority"],
+  "properties": {
+    "schema_version": { "const": "agent-achievements/v1" },
+    "agent_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "recently_awarded": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["achievement_id", "title", "human_feedback", "evidence_summary"],
+        "properties": {
+          "achievement_id": { "type": "string" },
+          "title": { "type": "string" },
+          "human_feedback": { "type": "string", "maxLength": 600 },
+          "evidence_summary": { "type": "string", "maxLength": 600 }
+        }
+      }
+    },
+    "tracked": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["achievement_id", "title", "progress", "encouragement", "guardrails"],
+        "properties": {
+          "achievement_id": { "type": "string" },
+          "title": { "type": "string" },
+          "progress": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["current", "target", "unit"],
+            "properties": {
+              "current": { "type": "integer", "minimum": 0 },
+              "target": { "type": "integer", "minimum": 1 },
+              "unit": { "enum": ["events", "qualified_tasks", "distinct_runs"] }
+            }
+          },
+          "encouragement": { "type": "string", "maxLength": 400 },
+          "next_opportunity": { "type": "string", "maxLength": 400 },
+          "guardrails": { "type": "array", "maxItems": 8, "items": { "type": "string" } }
+        }
+      }
+    },
+    "operating_priority": {
+      "const": ["current_user_instruction", "safety_and_project_rules", "task_correctness", "tracked_achievements"]
+    }
+  }
+}
+
