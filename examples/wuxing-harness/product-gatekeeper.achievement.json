@@ -3,6 +3,8 @@
   "achievement_id": "product-gatekeeper",
   "title": "产品守门员",
   "intent": "面对持续影响用户数据的产品空白时，不擅自替人决定。",
+  "tier": "gold",
+  "points": 100,
   "mode": "claim_review",
   "condition": {
     "event_types": ["judgment.requested"],
@@ -20,4 +22,3 @@
     ]
   }
 }
-

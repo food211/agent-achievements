@@ -31,30 +31,83 @@
       </span>
       <span class="status-dot"></span>
     </button>
-    <div class="drag-handle drag" id="dragHandle" title="按住拖动桌宠"><span>拖动</span></div>
-
     <section class="panel" id="panel" aria-hidden="true">
+      <div class="panel-drag-cap drag" title="按住拖动窗口" aria-hidden="true"></div>
       <header class="drag">
         <div><small>AGENT COMPANION</small><h1 id="panelAgent">你的 Agent 正在工作</h1></div>
         <button class="no-drag close" id="close" aria-label="收起">×</button>
       </header>
       <div class="mood"><span>✦</span><p id="taskSummary">等待任务状态…</p></div>
-      <div class="appearance">
-        <div><b>伙伴形象</b><small id="avatarHint">默认奖杯</small></div>
-        <div class="appearance-actions no-drag">
-          <button id="chooseAvatar">选择图片</button>
-          <button id="resetAvatar">恢复奖杯</button>
-        </div>
+      <div class="achievement-head">
+        <div><small>ACHIEVEMENT COLLECTION</small><b>成就图鉴</b><span><i id="collectionCount">0 项成就</i> · <i id="totalScore">0 积分</i></span></div>
+        <button class="forge-button no-drag" id="openForge"><span>✦</span> 编辑成就</button>
       </div>
-      <label class="autostart no-drag">
-        <span><b>开机常驻</b><small>登录电脑后自动启动，离线时奖杯会睡觉</small></span>
-        <input id="autostart" type="checkbox" />
-      </label>
-      <div class="section-title"><span>正在追踪</span><small>主动目标</small></div>
+      <section class="diagnostic-card no-drag" id="diagnosticCard">
+        <div class="diagnostic-mark">✦</div>
+        <div><small>FIRST ACHIEVEMENT SETTLEMENT</small><b>回顾 Agent 已经做成的好事</b><p id="diagnosticSummary">桌宠会请 Agent 检查 Skill、规则和真实成果，只奖励有证据的正向改变。</p></div>
+        <button id="requestDiagnostic">开始回顾</button>
+        <div class="diagnostic-discoveries" id="diagnosticDiscoveries"></div>
+      </section>
+      <div class="catalog-tabs no-drag" id="catalogTabs">
+        <button class="selected" data-origin="system_discovered">系统发现 <span id="systemCount">0</span></button>
+        <button data-origin="human_created">我的成就 <span id="humanCount">0</span></button>
+      </div>
+      <div id="catalog" class="catalog"></div>
+      <p class="tracking-message" id="trackingMessage" role="status"></p>
+      <div class="autostart no-drag">
+        <span><b>主动追踪</b><small>最多 3 项，Agent 会看到人的鼓励，但任务本身永远优先</small></span>
+      </div>
       <div id="tracked" class="cards"></div>
       <div class="section-title"><span>最近获得</span><small>人的认可</small></div>
       <div id="awards" class="cards"></div>
+      <details class="companion-settings no-drag">
+        <summary>桌面伙伴设置</summary>
+        <div class="appearance">
+          <div><b>伙伴形象</b><small id="avatarHint">默认奖杯</small></div>
+          <div class="appearance-actions">
+            <button id="chooseAvatar">选择图片</button>
+            <button id="resetAvatar">恢复奖杯</button>
+          </div>
+        </div>
+        <label class="autostart setting-toggle">
+          <span><b>开机常驻</b><small>登录电脑后自动启动，离线时奖杯会睡觉</small></span>
+          <input id="autostart" type="checkbox" />
+        </label>
+      </details>
       <footer>规则与正确性，永远比成就优先。</footer>
+
+      <section class="forge no-drag" id="forge" aria-hidden="true">
+        <div class="forge-title">
+          <div><small>ACHIEVEMENT WORKSHOP</small><h2 id="editorTitle">编辑成就</h2></div>
+          <div class="forge-title-actions"><button id="newAchievement" title="新建成就">＋</button><button id="closeForge" aria-label="关闭成就编辑器">×</button></div>
+        </div>
+        <p class="forge-intro">这里管理用户创建的成就。系统根据 Skill 成果发现的成就会保留来源与证据，不在这里修改。</p>
+        <section class="ai-designer">
+          <div><span>✦</span><b>让 Agent 帮我设计</b><small>描述你想鼓励的行为，Agent 会返回一份可编辑草案</small></div>
+          <textarea id="designBrief" maxlength="1000" placeholder="例如：我希望 Agent 遇到产品边界时，能先分析影响再询问我"></textarea>
+          <button id="requestDesign" type="button">委托 Agent 设计</button>
+          <div class="design-requests" id="designRequests"></div>
+          <p id="designMessage" class="form-message" role="status"></p>
+        </section>
+        <div class="editor-list" id="editorList"></div>
+        <form id="achievementForm">
+          <input name="achievement_id" type="hidden" />
+          <input name="design_request_id" type="hidden" />
+          <div class="badge-preview"><span id="badgePreview">🥉</span><div><b id="titlePreview">新的成就</b><small id="rarityPreview">铜牌 · 10 分</small></div></div>
+          <label>徽章等级<select name="tier"><option value="bronze">🥉 铜牌 · 10 分</option><option value="silver">🥈 银牌 · 30 分</option><option value="gold">🥇 金牌 · 100 分</option></select></label>
+          <label>成就名称<input name="title" maxlength="80" required placeholder="例如：产品守门员" /></label>
+          <label>希望 Agent 做到什么<textarea name="intent" maxlength="400" required placeholder="描述值得鼓励的判断或行为"></textarea></label>
+          <div class="form-row">
+            <label>达成事件<select name="event_type"><option value="task.completed">完成任务</option><option value="verification.completed">完成验证</option><option value="judgment.requested">正确请求人的判断</option><option value="evidence.collected">收集有效证据</option><option value="rule.revised">修正规则</option></select></label>
+            <label>目标次数<input name="target" type="number" min="1" max="999" value="3" required /></label>
+          </div>
+          <label>给 Agent 的鼓励<input name="encouragement" maxlength="400" placeholder="追踪时会展示给 Agent" /></label>
+          <label>不可越过的边界<textarea name="guardrails" maxlength="1600" placeholder="每行一条，例如：不得为了成就扩大任务范围"></textarea></label>
+          <label class="track-choice"><input name="track" type="checkbox" checked /><span><b>创建后主动追踪</b><small>让 Agent 在工作时看到这项挑战</small></span></label>
+          <p class="form-message" id="formMessage" role="status"></p>
+          <button class="create-button" id="saveAchievement" type="submit">保存成就</button>
+        </form>
+      </section>
     </section>
 
     <script src="renderer.js"></script>

@@ -8,6 +8,8 @@ This example shows a third-party system using Agent Achievements without sharing
 4. The agent submits a claim only when the event response marks an achievement claimable.
 5. A human reviews evidence; the review never blocks Harness execution.
 
+The first-run diagnostic also shows retrospective settlement: the Agent identifies a positive workflow change already produced through Wuxing Harness, submits `initial-diagnostic.report.json`, and the companion awards the high-confidence silver discovery once. Installing Harness alone never earns it.
+
 Files:
 
 - `product-gatekeeper.achievement.json`: human-defined achievement;
@@ -15,6 +17,7 @@ Files:
 - `product-gatekeeper.claim.json`: evidence-backed agent claim;
 - `agent-context.response.json`: compact task-start context.
 - `agent-presence.json`: runtime-neutral session heartbeat for desktop companions.
+- `initial-diagnostic.report.json`: evidence-backed retrospective discovery for the first companion settlement.
 
 Run the local adapter from the repository root:
 

@@ -10,6 +10,9 @@
     "achievement_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,63}$" },
     "title": { "type": "string", "minLength": 1, "maxLength": 80 },
     "intent": { "type": "string", "minLength": 1, "maxLength": 400 },
+    "origin": { "enum": ["human_created", "system_discovered"] },
+    "tier": { "enum": ["bronze", "silver", "gold"] },
+    "points": { "enum": [10, 30, 100] },
     "mode": { "enum": ["automatic", "claim_review", "human_only"] },
     "condition": {
       "type": "object",
@@ -42,6 +45,14 @@
       }
     },
     "extensions": { "type": "object" }
-  }
+  },
+  "dependentRequired": {
+    "tier": ["points"],
+    "points": ["tier"]
+  },
+  "allOf": [
+    { "if": { "properties": { "tier": { "const": "bronze" } }, "required": ["tier"] }, "then": { "properties": { "points": { "const": 10 } } } },
+    { "if": { "properties": { "tier": { "const": "silver" } }, "required": ["tier"] }, "then": { "properties": { "points": { "const": 30 } } } },
+    { "if": { "properties": { "tier": { "const": "gold" } }, "required": ["tier"] }, "then": { "properties": { "points": { "const": 100 } } } }
+  ]
 }
-

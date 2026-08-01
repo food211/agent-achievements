@@ -11,7 +11,15 @@ const statePath = path.join(root, "state.json");
 const eventsPath = path.join(root, "events.jsonl");
 const claimsPath = path.join(root, "claims.jsonl");
 const presencePath = path.join(root, "presence.json");
+const designRequestsPath = path.join(root, "achievement-design-requests.json");
+const diagnosticRequestsPath = path.join(root, "achievement-diagnostics.json");
 const avatarExtensions = ["png", "jpg", "jpeg", "webp", "svg"];
+const tierConfig = { bronze: { label: "铜牌", points: 10 }, silver: { label: "银牌", points: 30 }, gold: { label: "金牌", points: 100 } };
+
+function achievementTier(item) {
+  const tier = item?.tier || item?.extensions?.tier || ({ rare: "silver", epic: "gold", legendary: "gold" }[item?.extensions?.rarity] || "bronze");
+  return { tier, points: tierConfig[tier]?.points || 10 };
+}
 
 const args = process.argv.slice(2);
 const command = args.shift();
@@ -56,6 +64,8 @@ async function init() {
   if (!existsSync(eventsPath)) await writeFile(eventsPath, "", "utf8");
   if (!existsSync(claimsPath)) await writeFile(claimsPath, "", "utf8");
   if (!existsSync(presencePath)) await writeFile(presencePath, `${JSON.stringify({ schema_version: VERSION, sessions: [] }, null, 2)}\n`, "utf8");
+  if (!existsSync(designRequestsPath)) await writeFile(designRequestsPath, `${JSON.stringify({ schema_version: VERSION, requests: [] }, null, 2)}\n`, "utf8");
+  if (!existsSync(diagnosticRequestsPath)) await writeFile(diagnosticRequestsPath, `${JSON.stringify({ schema_version: VERSION, requests: [] }, null, 2)}\n`, "utf8");
   process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: { root } }, null, 2)}\n`);
 }
 
@@ -116,12 +126,17 @@ async function avatar() {
 
 async function context() {
   const state = await loadState();
+  const designDocument = existsSync(designRequestsPath) ? JSON.parse(await readFile(designRequestsPath, "utf8")) : { requests: [] };
+  const diagnosticDocument = existsSync(diagnosticRequestsPath) ? JSON.parse(await readFile(diagnosticRequestsPath, "utf8")) : { requests: [] };
+  const designRequests = (designDocument.requests || []).filter((item) => item.status === "pending").slice(0, 3).map((item) => ({ request_id: item.request_id, brief: item.brief }));
+  const diagnosticRequests = (diagnosticDocument.requests || []).filter((item) => item.status === "pending").slice(0, 2).map((item) => ({ request_id: item.request_id, reason: item.reason }));
   const agentId = option("agent");
   if (!agentId) fail("AGENT_REQUIRED", "Pass --agent", "agent_id");
   const tracked = state.achievements
     .filter((item) => state.tracked.includes(item.achievement_id))
     .slice(0, 3)
     .map((item) => ({
+      ...achievementTier(item),
       achievement_id: item.achievement_id,
       title: item.title,
       progress: {
@@ -133,29 +148,121 @@ async function context() {
       guardrails: item.tracking.guardrails
     }));
   const recentlyAwarded = state.awards.slice(-3).map((award) => ({
+    ...achievementTier(state.achievements.find((item) => item.achievement_id === award.achievement_id)),
     achievement_id: award.achievement_id,
     title: state.achievements.find((item) => item.achievement_id === award.achievement_id)?.title || award.achievement_id,
     human_feedback: award.human_feedback,
-    evidence_summary: award.evidence_summary
+    evidence_summary: award.evidence_summary,
+    ...(award.awarded_by ? { awarded_by: award.awarded_by } : {}),
+    ...(award.source_skill ? { source_skill: award.source_skill } : {})
   }));
   const payload = {
     schema_version: VERSION,
     agent_id: agentId,
     recently_awarded: recentlyAwarded,
     tracked,
+    design_requests: designRequests,
+    diagnostic_requests: diagnosticRequests,
     operating_priority: ["current_user_instruction", "safety_and_project_rules", "task_correctness", "tracked_achievements"]
   };
   if (option("format", "json") === "markdown") {
     const awards = recentlyAwarded.length
-      ? recentlyAwarded.map((item) => `- **${item.title}** — ${item.human_feedback}`).join("\n")
+      ? recentlyAwarded.map((item) => `- **${item.title}** · ${tierConfig[item.tier]?.label || "铜牌"} · ${item.points} 分${item.source_skill ? ` · 来自 ${item.source_skill}` : ""} — ${item.human_feedback}`).join("\n")
       : "- 暂无与当前任务相关的新成就。";
     const goals = tracked.length
-      ? tracked.map((item) => `- **${item.title}** · ${item.progress.current}/${item.progress.target}\n  ${item.encouragement}\n  边界：${item.guardrails.join("；")}`).join("\n")
+      ? tracked.map((item) => `- **${item.title}** · ${tierConfig[item.tier]?.label || "铜牌"} · ${item.points} 分 · ${item.progress.current}/${item.progress.target}\n  ${item.encouragement}\n  边界：${item.guardrails.join("；")}`).join("\n")
       : "- 当前没有主动追踪的成就。";
-    process.stdout.write(`# 我的成就\n\n## 最近获得\n\n${awards}\n\n## 当前追踪\n\n${goals}\n\n优先级：用户指令 ＞ 安全与项目规则 ＞ 正确性 ＞ 追踪成就\n`);
+    const designs = designRequests.length
+      ? designRequests.map((item) => `- **${item.request_id}** — ${item.brief}`).join("\n")
+      : "- 当前没有等待设计的成就。";
+    const diagnostics = diagnosticRequests.length
+      ? diagnosticRequests.map((item) => `- **${item.request_id}** — ${item.reason === "first_run" ? "首次回顾已完成的正向成果" : "重新回顾 Skill 带来的正向成果"}`).join("\n")
+      : "- 当前没有等待处理的成就诊断。";
+    process.stdout.write(`# 我的成就\n\n## 最近获得\n\n${awards}\n\n## 当前追踪\n\n${goals}\n\n## 等待 Agent 设计\n\n${designs}\n\n## 等待初始化诊断\n\n${diagnostics}\n\n优先级：用户指令 ＞ 安全与项目规则 ＞ 正确性 ＞ 追踪成就\n`);
     return;
   }
   process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+}
+
+async function designRequest() {
+  await mkdir(root, { recursive: true });
+  const brief = String(option("brief", "")).trim();
+  if (!brief || brief.length > 1000) fail("DESIGN_BRIEF_INVALID", "Brief must be 1-1000 characters", "brief");
+  const document = existsSync(designRequestsPath) ? JSON.parse(await readFile(designRequestsPath, "utf8")) : { schema_version: VERSION, requests: [] };
+  const request = {
+    schema_version: VERSION,
+    request_id: `design-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    brief,
+    status: "pending",
+    created_at: new Date().toISOString()
+  };
+  document.requests ||= [];
+  document.requests.push(request);
+  await writeFile(designRequestsPath, `${JSON.stringify(document, null, 2)}\n`, "utf8");
+  process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: request, next_actions: [{ action: "agent_design_achievement", request_id: request.request_id }] }, null, 2)}\n`);
+}
+
+async function designList() {
+  const document = existsSync(designRequestsPath) ? JSON.parse(await readFile(designRequestsPath, "utf8")) : { schema_version: VERSION, requests: [] };
+  process.stdout.write(`${JSON.stringify({ schema_version: VERSION, requests: (document.requests || []).filter((item) => item.status === "pending") }, null, 2)}\n`);
+}
+
+async function designSubmit() {
+  const proposal = await readInput();
+  if (proposal.schema_version !== VERSION || !proposal.request_id || !proposal.agent_id || !proposal.achievement?.title) {
+    fail("DESIGN_PROPOSAL_INVALID", "A v1 request_id, agent_id, and achievement draft are required", "proposal");
+  }
+  const document = existsSync(designRequestsPath) ? JSON.parse(await readFile(designRequestsPath, "utf8")) : { schema_version: VERSION, requests: [] };
+  const request = (document.requests || []).find((item) => item.request_id === proposal.request_id);
+  if (!request) fail("DESIGN_REQUEST_NOT_FOUND", `Unknown request: ${proposal.request_id}`, "request_id");
+  request.status = "proposed";
+  request.proposal = proposal;
+  await writeFile(designRequestsPath, `${JSON.stringify(document, null, 2)}\n`, "utf8");
+  process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: { request_id: request.request_id, status: request.status }, next_actions: [] }, null, 2)}\n`);
+}
+
+async function diagnosticRequest() {
+  await mkdir(root, { recursive: true });
+  const reason = option("reason", "manual");
+  if (!new Set(["first_run", "skills_changed", "manual"]).has(reason)) fail("DIAGNOSTIC_REASON_INVALID", "Use first_run, skills_changed, or manual", "reason");
+  const document = existsSync(diagnosticRequestsPath) ? JSON.parse(await readFile(diagnosticRequestsPath, "utf8")) : { schema_version: VERSION, requests: [] };
+  const existing = (document.requests || []).find((item) => item.status === "pending");
+  if (existing) {
+    process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: existing, next_actions: [{ action: "diagnose_past_achievements", request_id: existing.request_id }] }, null, 2)}\n`);
+    return;
+  }
+  const request = {
+    schema_version: VERSION,
+    request_id: `diagnostic-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    reason,
+    status: "pending",
+    created_at: new Date().toISOString(),
+    settled_discovery_ids: []
+  };
+  document.requests ||= [];
+  document.requests.push(request);
+  await writeFile(diagnosticRequestsPath, `${JSON.stringify(document, null, 2)}\n`, "utf8");
+  process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: request, next_actions: [{ action: "diagnose_past_achievements", request_id: request.request_id }] }, null, 2)}\n`);
+}
+
+async function diagnosticList() {
+  const document = existsSync(diagnosticRequestsPath) ? JSON.parse(await readFile(diagnosticRequestsPath, "utf8")) : { schema_version: VERSION, requests: [] };
+  process.stdout.write(`${JSON.stringify({ schema_version: VERSION, requests: (document.requests || []).filter((item) => item.status === "pending") }, null, 2)}\n`);
+}
+
+async function diagnosticSubmit() {
+  const report = await readInput();
+  if (report.schema_version !== VERSION || !report.request_id || !report.agent_id || !report.sources || !Array.isArray(report.discoveries)) {
+    fail("DIAGNOSTIC_REPORT_INVALID", "A v1 request_id, agent_id, sources, and discoveries are required", "report");
+  }
+  const document = existsSync(diagnosticRequestsPath) ? JSON.parse(await readFile(diagnosticRequestsPath, "utf8")) : { schema_version: VERSION, requests: [] };
+  const request = (document.requests || []).find((item) => item.request_id === report.request_id);
+  if (!request) fail("DIAGNOSTIC_REQUEST_NOT_FOUND", `Unknown request: ${report.request_id}`, "request_id");
+  request.status = "reported";
+  request.report = report;
+  request.settled_discovery_ids ||= [];
+  await writeFile(diagnosticRequestsPath, `${JSON.stringify(document, null, 2)}\n`, "utf8");
+  process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: { request_id: request.request_id, status: request.status }, next_actions: [] }, null, 2)}\n`);
 }
 
 async function define() {
@@ -233,6 +340,6 @@ async function claim() {
   process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: { claim_id: claim.claim_id, status: "pending_human_review", message: "Continue the primary task; achievement review is non-blocking." }, next_actions: [] }, null, 2)}\n`);
 }
 
-const commands = { init, presence, avatar, define, track, context, report, claim };
-if (!commands[command]) fail("COMMAND_UNKNOWN", "Use init, presence, avatar, define, track, context, report, or claim", "command");
+const commands = { init, presence, avatar, define, track, context, report, claim, "design-request": designRequest, "design-list": designList, "design-submit": designSubmit, "diagnostic-request": diagnosticRequest, "diagnostic-list": diagnosticList, "diagnostic-submit": diagnosticSubmit };
+if (!commands[command]) fail("COMMAND_UNKNOWN", "Use init, presence, avatar, define, track, context, report, claim, design-request, design-list, design-submit, diagnostic-request, diagnostic-list, or diagnostic-submit", "command");
 await commands[command]();

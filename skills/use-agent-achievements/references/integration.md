@@ -19,6 +19,8 @@ The CLI creates:
 ├── state.json
 ├── events.jsonl
 ├── claims.jsonl
+├── achievement-design-requests.json
+├── achievement-diagnostics.json
 └── presence.json
 ```
 
@@ -41,3 +43,7 @@ Use the same JSON Schemas for local files, HTTP payloads, MCP tools, and generat
 ## Agent runtime adapter
 
 Call context once at task start. Report meaningful events as they occur. Submit a claim only when requested by the report response. Avoid adding general-purpose achievement administration tools to the agent surface; creation, tracking, review, and revocation belong to the human interface.
+
+Agent-assisted design is the narrow exception: after a human creates a design request, context exposes its ID and brief. The Agent may submit one schema-valid proposal for that request. It may not apply the proposal, change tracking, award points, or review its own claim.
+
+Retrospective diagnosis is a second narrow workflow. The companion creates a request; the Agent reports only past, evidence-backed positive outcomes. The companion—not the Agent—applies the automatic-settlement policy and stores the award provenance.

@@ -5,6 +5,8 @@
     {
       "achievement_id": "root-cause-detective",
       "title": "根因侦探",
+      "tier": "silver",
+      "points": 30,
       "human_feedback": "你没有继续调整滚动条数值，而是找到了两个共同影响高度的状态问题。",
       "evidence_summary": "消息指示器异常与折叠消息高度没有扣除共同导致滚动错误。"
     }
@@ -13,6 +15,8 @@
     {
       "achievement_id": "product-gatekeeper",
       "title": "产品守门员",
+      "tier": "gold",
+      "points": 100,
       "progress": {
         "current": 2,
         "target": 3,
@@ -26,6 +30,8 @@
       ]
     }
   ],
+  "design_requests": [],
+  "diagnostic_requests": [],
   "operating_priority": [
     "current_user_instruction",
     "safety_and_project_rules",
@@ -33,4 +39,3 @@
     "tracked_achievements"
   ]
 }
-

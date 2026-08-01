@@ -7,7 +7,16 @@ contextBridge.exposeInMainWorld("agentCompanion", {
   resetAvatar: () => ipcRenderer.invoke("companion:reset-avatar"),
   getAutostart: () => ipcRenderer.invoke("companion:get-autostart"),
   setAutostart: (enabled) => ipcRenderer.invoke("companion:set-autostart", Boolean(enabled)),
+  saveAchievement: (input) => ipcRenderer.invoke("companion:save-achievement", input),
+  setAchievementTracking: (achievementId, enabled) => ipcRenderer.invoke("companion:set-achievement-tracking", achievementId, Boolean(enabled)),
+  requestAchievementDesign: (brief) => ipcRenderer.invoke("companion:request-achievement-design", brief),
+  requestAchievementDiagnostic: () => ipcRenderer.invoke("companion:request-achievement-diagnostic"),
+  confirmDiagnosticDiscovery: (requestId, discoveryId) => ipcRenderer.invoke("companion:confirm-diagnostic-discovery", requestId, discoveryId),
   hover: (hovering) => ipcRenderer.send("companion:hover", Boolean(hovering)),
+  dragPrepare: () => ipcRenderer.send("companion:drag-prepare"),
+  dragMove: () => ipcRenderer.send("companion:drag-move"),
+  dragEnd: (commit) => ipcRenderer.send("companion:drag-end", Boolean(commit)),
+  transitionReady: () => ipcRenderer.send("companion:transition-ready"),
   onState: (listener) => ipcRenderer.on("companion:state", (_event, payload) => listener(payload)),
   onExpanded: (listener) => ipcRenderer.on("companion:expanded", (_event, value) => listener(value))
 });

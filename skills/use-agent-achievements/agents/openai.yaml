@@ -1,4 +1,4 @@
 interface:
   display_name: "Agent Achievements"
-  short_description: "Track and celebrate evidence-backed AI achievements"
-  default_prompt: "Use $use-agent-achievements to load my tracked achievements, report relevant work, and submit evidence-backed claims."
+  short_description: "Discover, track, and celebrate evidence-backed AI achievements"
+  default_prompt: "Use $use-agent-achievements to discover past wins, load tracked achievements, and report evidence-backed work."

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-achievements.dev/schemas/v1/achievement-design-proposal.schema.json",
+  "title": "Agent-proposed achievement draft",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "agent_id", "proposed_at", "achievement"],
+  "properties": {
+    "schema_version": { "const": "agent-achievements/v1" },
+    "request_id": { "type": "string", "pattern": "^design-[a-z0-9-]{4,80}$" },
+    "agent_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "proposed_at": { "type": "string", "format": "date-time" },
+    "achievement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "intent", "tier", "event_type", "target", "encouragement", "guardrails"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "intent": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "tier": { "enum": ["bronze", "silver", "gold"] },
+        "event_type": { "$ref": "event.schema.json#/$defs/eventType" },
+        "target": { "type": "integer", "minimum": 1, "maximum": 999 },
+        "encouragement": { "type": "string", "maxLength": 400 },
+        "guardrails": { "type": "array", "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": 200 } }
+      }
+    }
+  }
+}

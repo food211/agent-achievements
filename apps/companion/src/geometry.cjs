@@ -2,13 +2,31 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), Math.max(min, max));
 }
 
-function nearestDock(bounds, workArea, threshold) {
+function equalBounds(left, right) {
+  return left.x === right.x
+    && left.y === right.y
+    && left.width === right.width
+    && left.height === right.height;
+}
+
+function calculateDraggedBounds(startBounds, startCursor, cursor) {
+  return {
+    x: Math.round(startBounds.x + cursor.x - startCursor.x),
+    y: Math.round(startBounds.y + cursor.y - startCursor.y),
+    width: startBounds.width,
+    height: startBounds.height
+  };
+}
+
+function nearestDock(bounds, workArea, threshold, allowedEdges = ["left", "right", "top", "bottom"]) {
+  const allowed = new Set(allowedEdges);
   const candidates = [
     ["left", Math.abs(bounds.x - workArea.x)],
     ["right", Math.abs(bounds.x + bounds.width - (workArea.x + workArea.width))],
     ["top", Math.abs(bounds.y - workArea.y)],
     ["bottom", Math.abs(bounds.y + bounds.height - (workArea.y + workArea.height))]
-  ].sort((a, b) => a[1] - b[1]);
+  ].filter(([edge]) => allowed.has(edge)).sort((a, b) => a[1] - b[1]);
+  if (!candidates.length) return null;
   if (candidates[0][1] > threshold) return null;
   const edge = candidates[0][0];
   const offset = edge === "left" || edge === "right" ? bounds.y - workArea.y : bounds.x - workArea.x;
@@ -33,5 +51,4 @@ function calculateDockedBounds(workArea, size, dock, peek, peekSize) {
   return { x, y, width: size.width, height: size.height };
 }
 
-module.exports = { calculateDockedBounds, clamp, nearestDock };
-
+module.exports = { calculateDockedBounds, calculateDraggedBounds, clamp, equalBounds, nearestDock };

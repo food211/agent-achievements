@@ -1,0 +1,37 @@
+{
+  "schema_version": "agent-achievements/v1",
+  "request_id": "diagnostic-wuxing-initial-001",
+  "agent_id": "codex-voice-md",
+  "diagnosed_at": "2026-08-01T14:30:00.000Z",
+  "sources": {
+    "skills": [
+      "wuxing-agent-harness",
+      "data-integrity",
+      "cold-start-history-backfill"
+    ],
+    "rule_scopes": 2
+  },
+  "discoveries": [
+    {
+      "discovery_id": "rule-gardener",
+      "title": "规则园丁",
+      "intent": "识别已经漂移或妨碍工作的 Agent 规则，并根据真实工作方式完成修订。",
+      "tier": "silver",
+      "source_skill": "wuxing-agent-harness",
+      "reason": "通过五行 Harness 复盘，修正了 data-integrity 中已经漂移的主 TE 约束，并把新增自动任务、外部同步和历史补账的询问边界沉淀成规则。",
+      "confidence": "high",
+      "evidence": [
+        {
+          "type": "decision_record",
+          "ref": "conversation:wuxing-harness-rule-review-2026-08-01",
+          "summary": "用户与 Agent 逐条确认了过时规则、入队边界和浏览器验证条件。"
+        },
+        {
+          "type": "commit",
+          "ref": "commit:382744fc6f18de7135074f137d8c0fbd4e9cf5d3",
+          "summary": "数据完整性与自动任务确认规则已按照当前代码和真实协作方式完成修订。"
+        }
+      ]
+    }
+  ]
+}

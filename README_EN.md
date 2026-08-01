@@ -10,6 +10,9 @@ Agent Achievements is an open achievement layer for AI agents. Third-party syste
 
 - **Passive achievements** progress in the background and do not influence an agent before they unlock.
 - **Tracked achievements** are explicitly selected by a human and appear in agent context as soft encouragement.
+- **System discoveries** retrospectively recognize positive outcomes already produced through installed Skills, rules, and verifiable artifacts.
+- **Human-created achievements** are defined directly by a person or drafted by an Agent for human review.
+- **Tiers and points.** Bronze, silver, and gold are worth 10, 30, and 100 points. Points are added only after a human awards the achievement.
 - **Rules remain stronger than achievements.** User instructions, safety, project constraints, and task correctness always take priority.
 - **Claims require evidence.** An agent may apply for an achievement but cannot award itself.
 - **Review is non-blocking.** The agent continues its primary task after submitting a claim.
@@ -24,9 +27,23 @@ The living trophy follows the lifecycle of any installed agent through the runti
 - it can display the identity and current task of connected agents;
 - it sleeps when heartbeats expire or sessions stop;
 - it expands to show tracked goals, progress, and recent human recognition.
-- its bottom edge is a dedicated drag handle with a hover cue, while the trophy remains a click-only target;
-- it snaps to any screen edge, retreats to a small peek, and reveals itself on hover;
+- the whole trophy distinguishes a short click from a drag after a movement threshold;
+- it snaps to the left, right, or top edge, keeps a clearly visible peek, and reveals itself on hover;
+- opening and closing the panel restores the trophy's exact prior position;
+- people can create or edit bronze, silver, and gold achievements, preserve existing progress, and switch tracked goals from either the catalog or tracked list;
+- on first run, the companion asks the Agent to review evidence-backed positive outcomes and separates system discoveries from human-created goals;
+- when a person only knows the behavior they want to encourage, they can ask an installed agent to return a schema-valid, editable achievement draft;
 - it celebrates new achievements and offers an explicit launch-at-login toggle.
+
+On Windows, a dedicated high-contrast living-trophy icon appears in the system tray while the companion stays out of the taskbar.
+
+The status light is green while an agent is working, amber while it is waiting after a turn, and gray when no valid session remains. Codex can keep this state current through its official lifecycle hooks:
+
+```powershell
+node skills/use-agent-achievements/scripts/install-codex-hooks.mjs
+```
+
+Review and trust the installed hook in Codex `/hooks`. It writes normalized presence only, does not read prompt content, and never counts presence as achievement evidence.
 
 Window geometry and typography use system DIPs, and the companion repositions itself when display scale metrics change.
 
@@ -75,13 +92,17 @@ npm run validate
 
 ## Agent-facing operations
 
-The protocol deliberately exposes only three actions:
+The normal task protocol deliberately exposes only three actions:
 
 1. `achievements_get_context` at task start;
 2. `achievements_report_event` for meaningful work events;
 3. `achievements_submit_claim` only when the event response marks an achievement as claimable.
 
-A separate `presence` lifecycle signal controls companion visibility and never counts as achievement evidence.
+A separate `presence` lifecycle signal controls the companion's activity state and never counts as achievement evidence.
+
+Only after a human explicitly asks for design help does agent context include `design_requests`. An installed agent can submit an `achievement-design-proposal.schema.json` draft, but the human must edit or save it and remains the only authority that can award it.
+
+First-run and manual retrospectives add `diagnostic_requests`. The Agent submits evidence-backed discoveries; the companion automatically settles only high-confidence bronze or silver results. Medium-confidence discoveries and all gold awards require human confirmation. Installing or invoking a Skill is never sufficient evidence.
 
 See [the protocol reference](./skills/use-agent-achievements/references/protocol.md) for payloads and behavior. The JSON Schemas in [`packages/protocol/schemas`](./packages/protocol/schemas) are the canonical source for every public `agent-achievements/v1` payload.
 

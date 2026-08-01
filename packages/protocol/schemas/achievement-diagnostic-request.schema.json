@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-achievements.dev/schemas/v1/achievement-diagnostic-request.schema.json",
+  "title": "Request to discover evidence-backed past achievements",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "reason", "status", "created_at"],
+  "properties": {
+    "schema_version": { "const": "agent-achievements/v1" },
+    "request_id": { "type": "string", "pattern": "^diagnostic-[a-z0-9-]{4,80}$" },
+    "reason": { "enum": ["first_run", "skills_changed", "manual"] },
+    "status": { "enum": ["pending", "reported", "settled"] },
+    "created_at": { "type": "string", "format": "date-time" },
+    "settled_discovery_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,63}$" }
+    },
+    "report": { "$ref": "achievement-diagnostic-report.schema.json" }
+  }
+}

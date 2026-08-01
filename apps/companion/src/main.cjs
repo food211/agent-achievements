@@ -2,18 +2,22 @@ const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, shell, T
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { calculateDockedBounds, clamp, nearestDock } = require("./geometry.cjs");
+const { buildHumanAchievement, calculateScore, settleDiagnosticReport, tierMetadata, updateTrackedIds } = require("./achievement-factory.cjs");
+const { calculateDockedBounds, calculateDraggedBounds, clamp, equalBounds, nearestDock } = require("./geometry.cjs");
 
 const DATA_HOME = path.resolve(process.env.AGENT_ACHIEVEMENTS_HOME || path.join(os.homedir(), ".agent-achievements"));
 const STATE_PATH = path.join(DATA_HOME, "state.json");
 const PRESENCE_PATH = path.join(DATA_HOME, "presence.json");
 const SETTINGS_PATH = path.join(DATA_HOME, "companion-settings.json");
-const COLLAPSED = { width: 76, height: 82 };
-const EXPANDED = { width: 390, height: 580 };
+const DESIGN_REQUESTS_PATH = path.join(DATA_HOME, "achievement-design-requests.json");
+const DIAGNOSTICS_PATH = path.join(DATA_HOME, "achievement-diagnostics.json");
+const COLLAPSED = { width: 94, height: 100 };
+const EXPANDED = { width: 430, height: 650 };
 const SNAP_DISTANCE = 34;
-const EDGE_PEEK = 17;
+const EDGE_PEEK = 30;
 const AVATAR_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "svg"];
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+const TRAY_ICON_PATH = path.join(__dirname, "tray-icon.svg");
 
 let window;
 let tray;
@@ -22,6 +26,9 @@ let lastPayload = "";
 let quitting = false;
 let movingProgrammatically = false;
 let hideTimer;
+let petDrag = null;
+let collapsedRestoreBounds = null;
+let transitionFallback;
 let avatarCache = { key: "", value: null };
 let companionSettings = readJson(SETTINGS_PATH, { dock: null, free_bounds: null });
 
@@ -32,6 +39,13 @@ function readJson(file, fallback) {
 function writeSettings() {
   fs.mkdirSync(DATA_HOME, { recursive: true });
   fs.writeFileSync(SETTINGS_PATH, `${JSON.stringify(companionSettings, null, 2)}\n`, "utf8");
+}
+
+function writeJsonAtomic(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const temporary = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  fs.renameSync(temporary, file);
 }
 
 function activeSessions() {
@@ -65,6 +79,59 @@ function clearAvatarFiles() {
   avatarCache = { key: "", value: null };
 }
 
+function diagnosticDocument() {
+  return readJson(DIAGNOSTICS_PATH, { schema_version: "agent-achievements/v1", requests: [] });
+}
+
+function createDiagnosticRequest(reason = "manual") {
+  const document = diagnosticDocument();
+  const existing = (document.requests || []).find((item) => item.status === "pending");
+  if (existing) return existing;
+  const request = {
+    schema_version: "agent-achievements/v1",
+    request_id: `diagnostic-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    reason,
+    status: "pending",
+    created_at: new Date().toISOString(),
+    settled_discovery_ids: []
+  };
+  document.requests ||= [];
+  document.requests.push(request);
+  writeJsonAtomic(DIAGNOSTICS_PATH, document);
+  return request;
+}
+
+function ensureInitialDiagnostic() {
+  const document = diagnosticDocument();
+  if (!(document.requests || []).length) createDiagnosticRequest("first_run");
+}
+
+function settleReportedDiagnostics(confirm = null) {
+  const document = diagnosticDocument();
+  const state = readJson(STATE_PATH, {
+    schema_version: "agent-achievements/v1", achievements: [], progress: {}, tracked: [], awards: [], processed_event_ids: []
+  });
+  let changed = false;
+  for (const request of document.requests || []) {
+    if (!request.report || !["reported", "settled"].includes(request.status)) continue;
+    const before = new Set(request.settled_discovery_ids || []);
+    const result = settleDiagnosticReport(state, request.report, {
+      confirmDiscoveryId: confirm?.requestId === request.request_id ? confirm.discoveryId : undefined
+    });
+    for (const award of result.awarded) before.add(award.discovery_id);
+    request.settled_discovery_ids = [...before];
+    const total = request.report.discoveries.length;
+    request.status = request.settled_discovery_ids.length >= total ? "settled" : "reported";
+    if (result.awarded.length) changed = true;
+  }
+  if (changed) {
+    writeJsonAtomic(STATE_PATH, state);
+    writeJsonAtomic(DIAGNOSTICS_PATH, document);
+    lastPayload = "";
+  }
+  return { changed, document };
+}
+
 function installAvatar(source) {
   const ext = path.extname(source).slice(1).toLowerCase();
   if (!AVATAR_EXTENSIONS.includes(ext)) throw new Error("unsupported-avatar-format");
@@ -77,10 +144,12 @@ function installAvatar(source) {
 }
 
 function currentPayload() {
+  settleReportedDiagnostics();
   const state = readJson(STATE_PATH, { achievements: [], progress: {}, tracked: [], awards: [] });
   const sessions = activeSessions();
   const achievements = state.achievements || [];
   const tracked = achievements.filter((item) => (state.tracked || []).includes(item.achievement_id)).slice(0, 3).map((item) => ({
+    ...tierMetadata(item),
     id: item.achievement_id,
     title: item.title,
     current: state.progress?.[item.achievement_id] || 0,
@@ -89,9 +158,42 @@ function currentPayload() {
   }));
   const awards = (state.awards || []).slice(-3).reverse().map((award) => ({
     ...award,
+    ...tierMetadata(achievements.find((item) => item.achievement_id === award.achievement_id)),
     title: achievements.find((item) => item.achievement_id === award.achievement_id)?.title || award.achievement_id
   }));
-  return { dataHome: DATA_HOME, sessions, tracked, awards, avatar: readAvatar() };
+  const awardedIds = new Set((state.awards || []).map((item) => item.achievement_id));
+  const score = calculateScore(achievements, state.awards);
+  const catalog = achievements.map((item) => ({
+    ...tierMetadata(item),
+    id: item.achievement_id,
+    title: item.title,
+    intent: item.intent,
+    current: state.progress?.[item.achievement_id] || 0,
+    target: item.condition?.target || 1,
+    event_type: item.condition?.event_types?.[0] || "task.completed",
+    encouragement: item.tracking?.encouragement || "",
+    guardrails: (item.tracking?.guardrails || []).join("\n"),
+    origin: item.origin || (item.extensions?.created_by === "system" ? "system_discovered" : "human_created"),
+    source_skill: item.extensions?.source_skill || null,
+    discovery_reason: (state.awards || []).find((award) => award.achievement_id === item.achievement_id)?.human_feedback || null,
+    editable: item.origin !== "system_discovered" && item.extensions?.created_by !== "system",
+    tracking_allowed: item.tracking?.allowed !== false,
+    tracked: (state.tracked || []).includes(item.achievement_id),
+    awarded: awardedIds.has(item.achievement_id)
+  }));
+  const designDocument = readJson(DESIGN_REQUESTS_PATH, { requests: [] });
+  const designs = (designDocument.requests || []).filter((item) => item.status !== "applied").slice(-5).reverse();
+  const diagnostics = diagnosticDocument();
+  const latestDiagnostic = (diagnostics.requests || []).at(-1) || null;
+  const settledIds = new Set(latestDiagnostic?.settled_discovery_ids || []);
+  const pendingDiscoveries = (latestDiagnostic?.report?.discoveries || []).filter((item) => !settledIds.has(item.discovery_id));
+  return { dataHome: DATA_HOME, sessions, tracked, awards, catalog, designs, score, avatar: readAvatar(), diagnostic: latestDiagnostic ? {
+    request_id: latestDiagnostic.request_id,
+    reason: latestDiagnostic.reason,
+    status: latestDiagnostic.status,
+    scanned_skills: latestDiagnostic.report?.sources?.skills?.length || 0,
+    pending_discoveries: pendingDiscoveries
+  } : null };
 }
 
 function currentWorkArea() {
@@ -99,9 +201,10 @@ function currentWorkArea() {
   return screen.getDisplayMatching(window.getBounds()).workArea;
 }
 
-function setWindowBounds(bounds) {
+function setWindowBounds(bounds, animate = true) {
+  if (equalBounds(window.getBounds(), bounds)) return;
   movingProgrammatically = true;
-  window.setBounds(bounds, true);
+  window.setBounds(bounds, animate);
   setTimeout(() => { movingProgrammatically = false; }, 120);
 }
 
@@ -129,9 +232,29 @@ function placeWindow({ peek = false } = {}) {
 
 function setExpanded(next) {
   clearTimeout(hideTimer);
+  if (next === expanded) return;
+  if (next) collapsedRestoreBounds = window.getBounds();
+  clearTimeout(transitionFallback);
+  window.setOpacity(0);
   expanded = next;
-  placeWindow({ peek: false });
+  if (!next && collapsedRestoreBounds) {
+    const restore = collapsedRestoreBounds;
+    collapsedRestoreBounds = null;
+    setWindowBounds(restore, false);
+  } else {
+    const size = expanded ? EXPANDED : COLLAPSED;
+    const bounds = companionSettings.dock ? dockedBounds(size, false) : freeBounds(size);
+    setWindowBounds(bounds, false);
+  }
   window.webContents.send("companion:expanded", expanded);
+  transitionFallback = setTimeout(() => {
+    if (window && !window.isDestroyed()) window.setOpacity(1);
+  }, 180);
+}
+
+function finishWindowTransition() {
+  clearTimeout(transitionFallback);
+  if (window && !window.isDestroyed()) window.setOpacity(1);
 }
 
 function revealFromEdge() {
@@ -146,10 +269,10 @@ function retreatToEdge() {
 }
 
 function detectSnap() {
-  if (movingProgrammatically || !window || window.isDestroyed()) return;
+  if (movingProgrammatically || petDrag || expanded || !window || window.isDestroyed()) return;
   const bounds = window.getBounds();
   const work = screen.getDisplayMatching(bounds).workArea;
-  const dock = nearestDock(bounds, work, SNAP_DISTANCE);
+  const dock = nearestDock(bounds, work, SNAP_DISTANCE, ["left", "right", "top"]);
   if (dock) {
     companionSettings = { ...companionSettings, dock };
     writeSettings();
@@ -159,6 +282,126 @@ function detectSnap() {
   }
   companionSettings = { ...companionSettings, dock: null, free_bounds: { x: bounds.x, y: bounds.y } };
   writeSettings();
+}
+
+function saveAchievement(input) {
+  const state = readJson(STATE_PATH, {
+    schema_version: "agent-achievements/v1",
+    achievements: [], progress: {}, tracked: [], awards: [], processed_event_ids: []
+  });
+  state.achievements ||= [];
+  state.progress ||= {};
+  state.tracked ||= [];
+  const requestedId = String(input?.achievement_id || "").trim();
+  const existingIndex = requestedId ? state.achievements.findIndex((item) => item.achievement_id === requestedId) : -1;
+  if (requestedId && existingIndex < 0) throw new Error("achievement-not-found");
+  const existing = existingIndex >= 0 ? state.achievements[existingIndex] : null;
+  if (existing?.origin === "system_discovered" || existing?.extensions?.created_by === "system") throw new Error("system-achievement-read-only");
+  const achievement = buildHumanAchievement(input, {
+    achievementId: existing?.achievement_id,
+    existingExtensions: existing?.extensions,
+    existingMode: existing?.mode,
+    existingCondition: existing?.condition,
+    evidenceRequired: existing?.evidence_required,
+    existingOrigin: existing?.origin
+  });
+  if (existingIndex >= 0) state.achievements[existingIndex] = achievement;
+  else state.achievements.push(achievement);
+  state.progress[achievement.achievement_id] ??= 0;
+  const tracking = updateTrackedIds(state.tracked, achievement.achievement_id, Boolean(input?.track));
+  state.tracked = tracking.tracked;
+  writeJsonAtomic(STATE_PATH, state);
+  if (input?.design_request_id) {
+    const designDocument = readJson(DESIGN_REQUESTS_PATH, { schema_version: "agent-achievements/v1", requests: [] });
+    const request = (designDocument.requests || []).find((item) => item.request_id === input.design_request_id);
+    if (request) {
+      request.status = "applied";
+      writeJsonAtomic(DESIGN_REQUESTS_PATH, designDocument);
+    }
+  }
+  lastPayload = "";
+  sync();
+  return {
+    achievement_id: achievement.achievement_id,
+    created: existingIndex < 0,
+    tracked: state.tracked.includes(achievement.achievement_id),
+    tracking_limit_reached: tracking.trackingLimitReached
+  };
+}
+
+function requestAchievementDesign(briefValue) {
+  const brief = String(briefValue || "").trim();
+  if (!brief || brief.length > 1000) throw new Error("design-brief-invalid");
+  const document = readJson(DESIGN_REQUESTS_PATH, { schema_version: "agent-achievements/v1", requests: [] });
+  const request = {
+    schema_version: "agent-achievements/v1",
+    request_id: `design-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    brief,
+    status: "pending",
+    created_at: new Date().toISOString()
+  };
+  document.requests ||= [];
+  document.requests.push(request);
+  writeJsonAtomic(DESIGN_REQUESTS_PATH, document);
+  lastPayload = "";
+  sync();
+  return { request_id: request.request_id, status: request.status };
+}
+
+function requestAchievementDiagnostic() {
+  const request = createDiagnosticRequest("manual");
+  lastPayload = "";
+  sync();
+  return { request_id: request.request_id, status: request.status };
+}
+
+function confirmDiagnosticDiscovery(requestId, discoveryId) {
+  const normalizedRequestId = String(requestId);
+  const normalizedDiscoveryId = String(discoveryId);
+  const request = (diagnosticDocument().requests || []).find((item) => item.request_id === normalizedRequestId);
+  const discovery = request?.report?.discoveries?.find((item) => item.discovery_id === normalizedDiscoveryId);
+  if (!discovery || (request.settled_discovery_ids || []).includes(normalizedDiscoveryId)) throw new Error("diagnostic-discovery-not-found");
+  const result = settleReportedDiagnostics({ requestId: normalizedRequestId, discoveryId: normalizedDiscoveryId });
+  if (!result.changed) throw new Error("diagnostic-discovery-not-found");
+  sync();
+  return { request_id: normalizedRequestId, discovery_id: normalizedDiscoveryId, awarded: true };
+}
+
+function setAchievementTracking(achievementId, enabled) {
+  const state = readJson(STATE_PATH, null);
+  const achievement = state?.achievements?.find((item) => item.achievement_id === achievementId);
+  if (!achievement) throw new Error("achievement-not-found");
+  if (enabled && achievement.tracking?.allowed === false) throw new Error("tracking-not-allowed");
+  const tracking = updateTrackedIds(state.tracked, achievementId, enabled);
+  if (tracking.trackingLimitReached) return { achievement_id: achievementId, tracked: false, tracking_limit_reached: true };
+  state.tracked = tracking.tracked;
+  writeJsonAtomic(STATE_PATH, state);
+  lastPayload = "";
+  sync();
+  return { achievement_id: achievementId, tracked: enabled, tracking_limit_reached: false };
+}
+
+function preparePetDrag() {
+  if (expanded || !window || window.isDestroyed()) return;
+  clearTimeout(hideTimer);
+  petDrag = { bounds: window.getBounds(), cursor: screen.getCursorScreenPoint(), moved: false };
+}
+
+function movePetDrag() {
+  if (!petDrag || expanded || !window || window.isDestroyed()) return;
+  clearTimeout(hideTimer);
+  if (!petDrag.moved) {
+    petDrag.moved = true;
+    companionSettings = { ...companionSettings, dock: null };
+  }
+  const bounds = calculateDraggedBounds(petDrag.bounds, petDrag.cursor, screen.getCursorScreenPoint());
+  window.setBounds(bounds, false);
+}
+
+function finishPetDrag(commit) {
+  const moved = Boolean(petDrag?.moved);
+  petDrag = null;
+  if (commit && moved) detectSnap();
 }
 
 function sync() {
@@ -224,7 +467,7 @@ function createWindow() {
 }
 
 function createTray() {
-  const icon = nativeImage.createFromPath(path.join(__dirname, "pet.svg")).resize({ width: 18, height: 18 });
+  const icon = nativeImage.createFromPath(TRAY_ICON_PATH).resize({ width: 20, height: 20, quality: "best" });
   tray = new Tray(icon);
   tray.setToolTip("Agent Achievements Companion");
   refreshTrayMenu();
@@ -236,11 +479,16 @@ if (!hasSingleInstanceLock) {
   app.quit();
 } else {
   app.whenReady().then(() => {
+    ensureInitialDiagnostic();
     createWindow();
     createTray();
     ipcMain.on("companion:toggle", () => setExpanded(!expanded));
     ipcMain.on("companion:collapse", () => { setExpanded(false); retreatToEdge(); });
     ipcMain.on("companion:hover", (_event, hovering) => hovering ? revealFromEdge() : retreatToEdge());
+    ipcMain.on("companion:drag-prepare", preparePetDrag);
+    ipcMain.on("companion:drag-move", movePetDrag);
+    ipcMain.on("companion:drag-end", (_event, commit) => finishPetDrag(Boolean(commit)));
+    ipcMain.on("companion:transition-ready", finishWindowTransition);
     ipcMain.handle("companion:choose-avatar", async () => {
       const result = await dialog.showOpenDialog(window, { title: "选择伙伴形象", properties: ["openFile"], filters: [{ name: "图片", extensions: AVATAR_EXTENSIONS }] });
       if (!result.canceled && result.filePaths[0]) installAvatar(result.filePaths[0]);
@@ -249,6 +497,11 @@ if (!hasSingleInstanceLock) {
     ipcMain.handle("companion:reset-avatar", () => { clearAvatarFiles(); sync(); });
     ipcMain.handle("companion:get-autostart", () => getAutostart());
     ipcMain.handle("companion:set-autostart", (_event, enabled) => setAutostart(Boolean(enabled)));
+    ipcMain.handle("companion:save-achievement", (_event, input) => saveAchievement(input));
+    ipcMain.handle("companion:set-achievement-tracking", (_event, achievementId, enabled) => setAchievementTracking(String(achievementId), Boolean(enabled)));
+    ipcMain.handle("companion:request-achievement-design", (_event, brief) => requestAchievementDesign(brief));
+    ipcMain.handle("companion:request-achievement-diagnostic", () => requestAchievementDiagnostic());
+    ipcMain.handle("companion:confirm-diagnostic-discovery", (_event, requestId, discoveryId) => confirmDiagnosticDiscovery(requestId, discoveryId));
     screen.on("display-metrics-changed", () => placeWindow({ peek: Boolean(companionSettings.dock) && !expanded }));
     setInterval(sync, 1000).unref();
     sync();

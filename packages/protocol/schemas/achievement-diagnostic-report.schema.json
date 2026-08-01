@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-achievements.dev/schemas/v1/achievement-diagnostic-report.schema.json",
+  "title": "Evidence-backed retrospective achievement report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "agent_id", "diagnosed_at", "sources", "discoveries"],
+  "properties": {
+    "schema_version": { "const": "agent-achievements/v1" },
+    "request_id": { "type": "string", "pattern": "^diagnostic-[a-z0-9-]{4,80}$" },
+    "agent_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "diagnosed_at": { "type": "string", "format": "date-time" },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skills", "rule_scopes"],
+      "properties": {
+        "skills": { "type": "array", "maxItems": 100, "items": { "type": "string", "minLength": 1, "maxLength": 128 } },
+        "rule_scopes": { "type": "integer", "minimum": 0, "maximum": 10000 }
+      }
+    },
+    "discoveries": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["discovery_id", "title", "intent", "tier", "source_skill", "reason", "confidence", "evidence"],
+        "properties": {
+          "discovery_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,63}$" },
+          "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "intent": { "type": "string", "minLength": 1, "maxLength": 400 },
+          "tier": { "enum": ["bronze", "silver", "gold"] },
+          "source_skill": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "reason": { "type": "string", "minLength": 1, "maxLength": 600 },
+          "confidence": { "enum": ["high", "medium"] },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "items": { "$ref": "event.schema.json#/$defs/evidence" }
+          }
+        }
+      }
+    }
+  }
+}

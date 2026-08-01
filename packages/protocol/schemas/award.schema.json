@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-achievements.dev/schemas/v1/award.schema.json",
+  "title": "Achievement award",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["award_id", "achievement_id", "agent_id", "awarded_at", "awarded_by", "points", "human_feedback", "evidence_summary"],
+  "properties": {
+    "award_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "achievement_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,63}$" },
+    "agent_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "awarded_at": { "type": "string", "format": "date-time" },
+    "awarded_by": { "enum": ["human", "system"] },
+    "points": { "enum": [10, 30, 100] },
+    "human_feedback": { "type": "string", "minLength": 1, "maxLength": 600 },
+    "evidence_summary": { "type": "string", "minLength": 1, "maxLength": 600 },
+    "source_skill": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "diagnostic_id": { "type": "string", "maxLength": 128 },
+    "discovery_id": { "type": "string", "maxLength": 64 },
+    "discovery_key": { "type": "string", "maxLength": 200 },
+    "evidence": { "type": "array", "minItems": 1, "maxItems": 12, "items": { "$ref": "event.schema.json#/$defs/evidence" } }
+  }
+}

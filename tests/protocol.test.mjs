@@ -19,7 +19,12 @@ const schemaFiles = [
   "packages/protocol/schemas/context-request.schema.json",
   "packages/protocol/schemas/context-response.schema.json",
   "packages/protocol/schemas/claim.schema.json",
-  "packages/protocol/schemas/presence.schema.json"
+  "packages/protocol/schemas/presence.schema.json",
+  "packages/protocol/schemas/achievement-design-request.schema.json",
+  "packages/protocol/schemas/achievement-design-proposal.schema.json",
+  "packages/protocol/schemas/achievement-diagnostic-request.schema.json",
+  "packages/protocol/schemas/achievement-diagnostic-report.schema.json",
+  "packages/protocol/schemas/award.schema.json"
 ];
 
 async function validator(schemaFile) {
@@ -35,7 +40,8 @@ const fixtures = [
   ["packages/protocol/schemas/event.schema.json", "examples/wuxing-harness/judgment-requested.event.json"],
   ["packages/protocol/schemas/claim.schema.json", "examples/wuxing-harness/product-gatekeeper.claim.json"],
   ["packages/protocol/schemas/context-response.schema.json", "examples/wuxing-harness/agent-context.response.json"],
-  ["packages/protocol/schemas/presence.schema.json", "examples/wuxing-harness/agent-presence.json"]
+  ["packages/protocol/schemas/presence.schema.json", "examples/wuxing-harness/agent-presence.json"],
+  ["packages/protocol/schemas/achievement-diagnostic-report.schema.json", "examples/wuxing-harness/initial-diagnostic.report.json"]
 ];
 
 for (const [schemaFile, fixtureFile] of fixtures) {
@@ -53,4 +59,32 @@ test("strict event schema rejects accidental fields", async () => {
   fixture.accidental_field = true;
   assert.equal(validate(fixture), false);
   assert.ok(validate.errors.some((error) => error.keyword === "additionalProperties"));
+});
+
+test("achievement tiers enforce their fixed point values", async () => {
+  const validate = await validator("packages/protocol/schemas/achievement.schema.json");
+  const fixture = await json("examples/wuxing-harness/product-gatekeeper.achievement.json");
+  fixture.points = 10;
+  assert.equal(validate(fixture), false);
+  assert.ok(validate.errors.some((error) => error.keyword === "const"));
+});
+
+test("Agent achievement design proposals conform to v1", async () => {
+  const validate = await validator("packages/protocol/schemas/achievement-design-proposal.schema.json");
+  const proposal = {
+    schema_version: "agent-achievements/v1",
+    request_id: "design-test-1234",
+    agent_id: "codex-local",
+    proposed_at: "2026-08-01T00:00:00.000Z",
+    achievement: {
+      title: "证据工匠",
+      intent: "在关键判断前收集可核验的证据。",
+      tier: "silver",
+      event_type: "evidence.collected",
+      target: 3,
+      encouragement: "先找证据，再形成结论。",
+      guardrails: ["不得为了成就扩大任务范围"]
+    }
+  };
+  assert.equal(validate(proposal), true, JSON.stringify(validate.errors, null, 2));
 });

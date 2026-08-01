@@ -27,7 +27,11 @@ Provide `agent_id` and a task with `id`, `type`, `summary`, and `risk`. Risk is 
 - `irreversible`
 - `unknown`
 
-The response contains at most three recent awards and three explicitly tracked achievements. Passive achievement progress is hidden from the agent until it unlocks.
+The response contains at most three recent awards and three explicitly tracked achievements. Every visible achievement includes its tier and points: bronze = 10, silver = 30, and gold = 100. Passive achievement progress is hidden from the agent until it unlocks.
+
+If the human explicitly requested help designing an achievement, the response may also contain up to three pending `design_requests`. Submit a draft matching `achievement-design-proposal.schema.json`; choose the lowest tier appropriate to the observable outcome and include guardrails against gaming. The human remains responsible for editing, saving, and awarding it.
+
+If the companion requests a retrospective, context may contain up to two `diagnostic_requests`. A report must match `achievement-diagnostic-report.schema.json`, attribute each discovery to an installed Skill, and include at least one concrete evidence reference. Installation, usage volume, and Agent self-description are not outcomes. The companion settles high-confidence bronze and silver discoveries; medium-confidence discoveries and gold require human confirmation.
 
 ### Report an event
 
@@ -84,3 +88,4 @@ An agent may submit a claim but may not award itself an achievement.
 - Prefer evidence references over copying private content.
 - Treat achievement review as non-blocking.
 - Keep hidden passive progress out of agent context.
+- Deduplicate system discoveries by diagnostic request and discovery ID so repeated scans cannot add points twice.

@@ -14,12 +14,16 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["achievement_id", "title", "human_feedback", "evidence_summary"],
+        "required": ["achievement_id", "title", "tier", "points", "human_feedback", "evidence_summary"],
         "properties": {
           "achievement_id": { "type": "string" },
           "title": { "type": "string" },
+          "tier": { "enum": ["bronze", "silver", "gold"] },
+          "points": { "enum": [10, 30, 100] },
           "human_feedback": { "type": "string", "maxLength": 600 },
-          "evidence_summary": { "type": "string", "maxLength": 600 }
+          "evidence_summary": { "type": "string", "maxLength": 600 },
+          "awarded_by": { "enum": ["human", "system"] },
+          "source_skill": { "type": "string", "maxLength": 128 }
         }
       }
     },
@@ -29,10 +33,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["achievement_id", "title", "progress", "encouragement", "guardrails"],
+        "required": ["achievement_id", "title", "tier", "points", "progress", "encouragement", "guardrails"],
         "properties": {
           "achievement_id": { "type": "string" },
           "title": { "type": "string" },
+          "tier": { "enum": ["bronze", "silver", "gold"] },
+          "points": { "enum": [10, 30, 100] },
           "progress": {
             "type": "object",
             "additionalProperties": false,
@@ -49,9 +55,34 @@
         }
       }
     },
+    "design_requests": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["request_id", "brief"],
+        "properties": {
+          "request_id": { "type": "string" },
+          "brief": { "type": "string", "maxLength": 1000 }
+        }
+      }
+    },
+    "diagnostic_requests": {
+      "type": "array",
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["request_id", "reason"],
+        "properties": {
+          "request_id": { "type": "string" },
+          "reason": { "enum": ["first_run", "skills_changed", "manual"] }
+        }
+      }
+    },
     "operating_priority": {
       "const": ["current_user_instruction", "safety_and_project_rules", "task_correctness", "tracked_achievements"]
     }
   }
 }
-
