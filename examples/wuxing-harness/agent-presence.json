@@ -1,0 +1,15 @@
+{
+  "schema_version": "agent-achievements/v1",
+  "session_id": "session_wuxing_night_shift",
+  "agent_id": "codex-voice-md",
+  "runtime": {
+    "id": "codex"
+  },
+  "status": "active",
+  "observed_at": "2026-08-01T02:13:30+08:00",
+  "expires_at": "2026-08-01T02:15:30+08:00",
+  "current_task": {
+    "id": "task_external_sync",
+    "summary": "新增外部数据同步并确认历史数据边界"
+  }
+}

@@ -1,0 +1,44 @@
+:root { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #f4f3f0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+button { font: inherit; }
+.drag { -webkit-app-region: drag; }
+.no-drag, button { -webkit-app-region: no-drag; }
+
+.pet-shell { position: absolute; inset: 0; width: 154px; height: 174px; padding: 10px; color: white; border: 0; background: transparent; text-align: center; cursor: pointer; }
+.aura { position: relative; width: 92px; height: 92px; margin: 2px auto 7px; display: block; border-radius: 48% 52% 54% 46%; background: radial-gradient(circle at 34% 26%, #fff6c9 0 9%, #f0c46b 30%, #8a70dc 68%, #302750 100%); box-shadow: 0 12px 40px rgba(121,94,210,.45), inset -10px -14px 22px rgba(38,27,74,.4); animation: float 3.2s ease-in-out infinite; }
+.aura:before { content: ""; position: absolute; inset: 8px; border: 1px solid rgba(255,255,255,.3); border-radius: inherit; }
+.eye { position: absolute; top: 39px; width: 7px; height: 10px; border-radius: 50%; background: #251d3b; animation: blink 5s infinite; }
+.eye.left { left: 31px; }.eye.right { right: 31px; }
+.smile { position: absolute; left: 39px; top: 53px; width: 15px; height: 8px; border-bottom: 2px solid #38244b; border-radius: 50%; }
+.spark { position: absolute; color: #f5d384; text-shadow: 0 0 10px #f2c66d; animation: twinkle 2s infinite; }
+.spark.one { top: 16px; right: 20px; }.spark.two { top: 52px; left: 13px; font-size: 25px; animation-delay: .6s; }
+.status-dot { position: absolute; top: 91px; right: 27px; width: 11px; height: 11px; border: 2px solid #171520; border-radius: 50%; background: #6de5a6; box-shadow: 0 0 12px #6de5a6; }
+.pet-shell strong, .pet-shell small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pet-shell strong { font-size: 12px; }.pet-shell small { margin-top: 3px; color: rgba(255,255,255,.65); font-size: 9px; }
+
+.panel { position: absolute; inset: 0; padding: 21px; display: none; background: linear-gradient(155deg, rgba(31,27,48,.97), rgba(11,13,20,.98) 62%); border: 1px solid rgba(255,255,255,.12); border-radius: 24px; box-shadow: 0 20px 70px rgba(0,0,0,.52); }
+.panel.visible { display: block; }
+.panel header { display: flex; align-items: start; justify-content: space-between; }
+.panel header small, .section-title small { color: #a495d8; font-size: 9px; letter-spacing: .13em; }
+.panel h1 { max-width: 280px; margin: 5px 0 0; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.close { width: 28px; height: 28px; color: #aaa6b7; border: 1px solid rgba(255,255,255,.1); border-radius: 50%; background: rgba(255,255,255,.05); cursor: pointer; }
+.mood { margin: 18px 0; padding: 13px; display: flex; align-items: center; gap: 11px; border: 1px solid rgba(242,198,109,.2); border-radius: 13px; background: rgba(242,198,109,.06); }
+.mood span { width: 28px; height: 28px; display: grid; place-items: center; color: #f2c66d; border-radius: 50%; background: rgba(242,198,109,.12); }
+.mood p { margin: 0; color: #d8d3c4; font-size: 11px; line-height: 1.5; }
+.section-title { margin: 15px 0 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 700; }
+.cards { display: grid; gap: 8px; }
+.cards article { padding: 11px; border: 1px solid rgba(255,255,255,.08); border-radius: 11px; background: rgba(255,255,255,.035); }
+.cards article div { display: flex; justify-content: space-between; gap: 10px; }
+.cards b { font-size: 11px; }.cards em { color: #f2c66d; font-size: 9px; font-style: normal; }
+.cards p { margin: 5px 0 8px; color: #9d99a8; font-size: 9px; line-height: 1.5; }
+.bar { height: 3px; display: block; overflow: hidden; border-radius: 3px; background: rgba(255,255,255,.09); }
+.bar i { height: 100%; display: block; background: linear-gradient(90deg, #9278e5, #f2c66d); }
+.cards .award { border-color: rgba(242,198,109,.16); }
+.empty { padding: 12px; color: #85808f; border: 1px dashed rgba(255,255,255,.1); border-radius: 10px; font-size: 9px; text-align: center; }
+.panel footer { position: absolute; left: 21px; right: 21px; bottom: 16px; color: #696675; font-size: 8px; text-align: center; }
+
+@keyframes float { 0%,100% { transform: translateY(2px) rotate(-1deg); } 50% { transform: translateY(-5px) rotate(1deg); } }
+@keyframes blink { 0%,46%,50%,100% { transform: scaleY(1); } 48% { transform: scaleY(.12); } }
+@keyframes twinkle { 0%,100% { opacity: .35; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.2); } }
+

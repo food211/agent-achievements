@@ -16,11 +16,23 @@ Agent Achievements is an open achievement layer for AI agents. Third-party syste
 
 The first integration is [Wuxing Agent Harness](./examples/wuxing-harness/README.md), but the protocol is intentionally runtime-neutral.
 
+## Desktop companion
+
+The desktop companion follows the lifecycle of any installed agent through the runtime-neutral `presence` heartbeat. It does not inspect Codex-specific process names:
+
+- it wakes when an agent session starts or performs work;
+- it can display the identity and current task of connected agents;
+- it sleeps when heartbeats expire or sessions stop;
+- it expands to show tracked goals, progress, and recent human recognition.
+
+The companion and the Skill share normalized state in `~/.agent-achievements`. Set `AGENT_ACHIEVEMENTS_HOME` to isolate a profile or workspace.
+
 ## Repository map
 
 ```text
 agent-achievements/
 ├── apps/demo/                         # Human UI + agent context preview
+├── apps/companion/                    # Desktop companion following agent presence
 ├── packages/protocol/                 # Canonical JSON Schemas
 ├── skills/use-agent-achievements/     # Installable agent Skill
 ├── examples/wuxing-harness/           # Third-party integration example
@@ -34,6 +46,12 @@ Node.js 20 or newer is required.
 ```powershell
 npm install
 npm run dev
+```
+
+Start the desktop companion:
+
+```powershell
+npm run companion
 ```
 
 Run validation:
@@ -50,13 +68,10 @@ The protocol deliberately exposes only three actions:
 2. `achievements_report_event` for meaningful work events;
 3. `achievements_submit_claim` only when the event response marks an achievement as claimable.
 
+A separate `presence` lifecycle signal controls companion visibility and never counts as achievement evidence.
+
 See [the protocol reference](./skills/use-agent-achievements/references/protocol.md) for payloads and behavior. The JSON Schemas in [`packages/protocol/schemas`](./packages/protocol/schemas) are the canonical source for every public `agent-achievements/v1` payload.
-
-## Status
-
-This repository currently contains the hackathon MVP: strict v1 schemas, a portable Skill, a Wuxing Harness example, and an interactive browser demo. A hosted API, authentication, and production persistence are intentionally left for the next milestone.
 
 ## License
 
 [MIT](./LICENSE)
-

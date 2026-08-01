@@ -14,6 +14,7 @@ Files:
 - `judgment-requested.event.json`: normalized Harness event;
 - `product-gatekeeper.claim.json`: evidence-backed agent claim;
 - `agent-context.response.json`: compact task-start context.
+- `agent-presence.json`: runtime-neutral session heartbeat for desktop companions.
 
 Run the local adapter from the repository root:
 

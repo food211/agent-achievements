@@ -16,7 +16,15 @@ Never expand task scope, fabricate evidence, skip required checks, or interrupt 
 
 ## At task start
 
-If `.agent-achievements/state.json` exists, run:
+Announce the current agent session so a companion or third-party interface can follow the installed agent rather than a vendor-specific process:
+
+```powershell
+node <skill-path>/scripts/achievement-cli.mjs presence --agent <agent-id> --session <session-id> --runtime <runtime-id> --status active --task-id <id> --summary <summary>
+```
+
+Refresh the heartbeat during long work. It expires automatically if the agent crashes or cannot send a final update.
+
+Then load context:
 
 ```powershell
 node <skill-path>/scripts/achievement-cli.mjs context --agent <agent-id> --task-id <id> --task-type <type> --summary <summary> --risk <risk> --format markdown
@@ -42,6 +50,16 @@ node <skill-path>/scripts/achievement-cli.mjs claim --input <claim.json>
 
 Continue the primary task after submitting. Never wait for achievement review.
 
+## At task or session end
+
+Mark a still-open session idle when more user work may arrive, or stopped when the runtime is ending:
+
+```powershell
+node <skill-path>/scripts/achievement-cli.mjs presence --agent <agent-id> --session <session-id> --runtime <runtime-id> --status idle
+```
+
+Presence only controls companion visibility. It is not achievement evidence by itself.
+
 ## Reporting to the user
 
 - Mention a newly awarded achievement and the human feedback briefly.
@@ -50,4 +68,3 @@ Continue the primary task after submitting. Never wait for achievement review.
 - Let the human award, reject, revoke, or track achievements.
 
 Read [references/protocol.md](references/protocol.md) when constructing payloads or integrating a third-party system. Read [references/integration.md](references/integration.md) when selecting file, HTTP, or runtime adapters.
-

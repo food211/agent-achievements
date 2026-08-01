@@ -4,6 +4,18 @@ The canonical machine-readable schemas live in `packages/protocol/schemas/` in t
 
 ## Operations
 
+### Report presence
+
+Use a runtime-neutral heartbeat so desktop companions can follow any installed agent without inspecting vendor process names. A presence update contains:
+
+- stable `session_id` and `agent_id`;
+- runtime `id`;
+- `active`, `idle`, or `stopped` status;
+- `observed_at` and `expires_at` timestamps;
+- optional current task ID and summary.
+
+Refresh before expiry during long work. Consumers must treat expired sessions as offline even if no `stopped` update arrived. Presence controls visibility and is not achievement evidence.
+
 ### Get context
 
 Provide `agent_id` and a task with `id`, `type`, `summary`, and `risk`. Risk is one of:
@@ -72,4 +84,3 @@ An agent may submit a claim but may not award itself an achievement.
 - Prefer evidence references over copying private content.
 - Treat achievement review as non-blocking.
 - Keep hidden passive progress out of agent context.
-

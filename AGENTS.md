@@ -9,6 +9,7 @@ This repository builds an open achievement layer for AI agents.
 - An agent may submit evidence-backed claims but may not award itself an achievement.
 - Achievement review must never block the agent's primary task.
 - Keep the agent interface small: get context, report an event, submit a claim.
+- Keep lifecycle presence separate from achievement evidence. Desktop companions follow valid heartbeats, never vendor process names.
 
 ## Protocol rules
 
@@ -23,4 +24,3 @@ This repository builds an open achievement layer for AI agents.
 - Run `npm test` after changing schemas or examples.
 - Run `npm run build` after changing the demo.
 - Validate the installable Skill with the repository's documented `quick_validate.py` command.
-

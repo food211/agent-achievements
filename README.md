@@ -49,11 +49,23 @@ Agent 只会看到：
 
 未追踪的隐藏进度、完整奖杯墙和管理配置不会占用 Agent 上下文。
 
+### 跟随 Agent 的桌面伙伴
+
+桌面伙伴不是 Codex 专属挂件，也不会通过猜测进程名判断某个产品是否启动。任何安装了 Skill 的 Agent 都可以发送标准 `presence` 心跳：
+
+- Agent 会话开始或执行任务时，桌面伙伴醒来；
+- 多个 Agent 可以同时报告自己的身份与当前任务；
+- 心跳过期或会话结束后，桌面伙伴自动休眠；
+- 点击宠物可以展开当前追踪目标、进度和最近获得的认可。
+
+桌面伙伴与第三方 UI、Skill 共享 `~/.agent-achievements` 中的规范化状态。设置 `AGENT_ACHIEVEMENTS_HOME` 可以隔离不同身份或工作空间。
+
 ## 仓库结构
 
 ```text
 agent-achievements/
 ├── apps/demo/                         # 人类界面与 Agent 上下文预览
+├── apps/companion/                    # 跟随 Agent 生命周期的桌面伙伴
 ├── packages/protocol/                 # 标准 JSON Schema
 ├── skills/use-agent-achievements/     # 可安装的 Agent Skill
 ├── examples/wuxing-harness/           # 第三方系统接入示例
@@ -69,6 +81,14 @@ npm install
 npm run dev
 ```
 
+启动桌面伙伴：
+
+```powershell
+npm run companion
+```
+
+桌面伙伴会保留在托盘中，并只在收到尚未过期的 Agent 心跳时出现。
+
 完整验证：
 
 ```powershell
@@ -83,22 +103,20 @@ npm run validate
 2. `achievements_report_event`：上报有意义、可观察的工作事件；
 3. `achievements_submit_claim`：只有事件响应明确标记为可申请时，才提交证据。
 
+另外提供独立的 `presence` 生命周期信号，只负责告诉桌面伴侣 Agent 是否在线，不参与成就计算。
+
 具体输入输出参见[协议说明](./skills/use-agent-achievements/references/protocol.md)。所有公开载荷都使用 `agent-achievements/v1`，并以 [`packages/protocol/schemas`](./packages/protocol/schemas) 中的 JSON Schema 为唯一事实源。
 
 ## 本地 Skill 体验
 
 ```powershell
 node skills\use-agent-achievements\scripts\achievement-cli.mjs init
+node skills\use-agent-achievements\scripts\achievement-cli.mjs presence --agent my-agent --session session-001 --runtime codex --status active --task-id task-001 --summary "正在完成一个真实任务"
 node skills\use-agent-achievements\scripts\achievement-cli.mjs define --input examples\wuxing-harness\product-gatekeeper.achievement.json
 node skills\use-agent-achievements\scripts\achievement-cli.mjs track --achievement product-gatekeeper
 node skills\use-agent-achievements\scripts\achievement-cli.mjs report --input examples\wuxing-harness\judgment-requested.event.json
 ```
 
-## 当前状态
-
-仓库目前包含黑客松 MVP：严格的 v1 Schema、可移植 Skill、五行 Harness 接入样例，以及可交互的浏览器 Demo。托管 API、身份认证和生产级持久化属于下一阶段。
-
 ## 开源协议
 
 [MIT](./LICENSE)
-

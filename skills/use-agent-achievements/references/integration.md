@@ -2,7 +2,7 @@
 
 ## Local workspace
 
-Use the bundled CLI and `.agent-achievements/` state. This is the hackathon MVP and requires only Node.js 20 or newer.
+Use the bundled CLI and `.agent-achievements/` state for a local, portable integration. It requires only Node.js 20 or newer.
 
 Initialize:
 
@@ -18,8 +18,11 @@ The CLI creates:
 .agent-achievements/
 ├── state.json
 ├── events.jsonl
-└── claims.jsonl
+├── claims.jsonl
+└── presence.json
 ```
+
+The default directory is `~/.agent-achievements` so a desktop companion and multiple agent workspaces can share one identity. Set `AGENT_ACHIEVEMENTS_HOME` to isolate a workspace or profile.
 
 ## Third-party system
 
@@ -28,6 +31,7 @@ Map native runtime events to `agent-achievements/v1` before submission. Do not m
 Recommended HTTP mapping:
 
 - `GET /v1/agents/{agent_id}/achievement-context`
+- `POST /v1/presence`
 - `POST /v1/events`
 - `POST /v1/claims`
 - `POST /v1/claims/{claim_id}/decision`

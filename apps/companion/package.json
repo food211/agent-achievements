@@ -1,0 +1,14 @@
+{
+  "name": "@agent-achievements/companion",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A desktop companion that follows any Agent Achievements presence heartbeat.",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "build": "node --check scripts/start.mjs && node --check src/main.cjs && node --check src/preload.cjs && node --check src/renderer.js"
+  },
+  "devDependencies": {
+    "electron": "^43.2.0"
+  }
+}

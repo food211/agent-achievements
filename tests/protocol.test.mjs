@@ -18,7 +18,8 @@ const schemaFiles = [
   "packages/protocol/schemas/achievement.schema.json",
   "packages/protocol/schemas/context-request.schema.json",
   "packages/protocol/schemas/context-response.schema.json",
-  "packages/protocol/schemas/claim.schema.json"
+  "packages/protocol/schemas/claim.schema.json",
+  "packages/protocol/schemas/presence.schema.json"
 ];
 
 async function validator(schemaFile) {
@@ -33,7 +34,8 @@ const fixtures = [
   ["packages/protocol/schemas/achievement.schema.json", "examples/wuxing-harness/product-gatekeeper.achievement.json"],
   ["packages/protocol/schemas/event.schema.json", "examples/wuxing-harness/judgment-requested.event.json"],
   ["packages/protocol/schemas/claim.schema.json", "examples/wuxing-harness/product-gatekeeper.claim.json"],
-  ["packages/protocol/schemas/context-response.schema.json", "examples/wuxing-harness/agent-context.response.json"]
+  ["packages/protocol/schemas/context-response.schema.json", "examples/wuxing-harness/agent-context.response.json"],
+  ["packages/protocol/schemas/presence.schema.json", "examples/wuxing-harness/agent-presence.json"]
 ];
 
 for (const [schemaFile, fixtureFile] of fixtures) {
@@ -52,4 +54,3 @@ test("strict event schema rejects accidental fields", async () => {
   assert.equal(validate(fixture), false);
   assert.ok(validate.errors.some((error) => error.keyword === "additionalProperties"));
 });
-

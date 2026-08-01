@@ -2,13 +2,15 @@
 
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 const VERSION = "agent-achievements/v1";
-const root = path.resolve(process.env.AGENT_ACHIEVEMENTS_HOME || ".agent-achievements");
+const root = path.resolve(process.env.AGENT_ACHIEVEMENTS_HOME || path.join(os.homedir(), ".agent-achievements"));
 const statePath = path.join(root, "state.json");
 const eventsPath = path.join(root, "events.jsonl");
 const claimsPath = path.join(root, "claims.jsonl");
+const presencePath = path.join(root, "presence.json");
 
 const args = process.argv.slice(2);
 const command = args.shift();
@@ -52,7 +54,41 @@ async function init() {
   }
   if (!existsSync(eventsPath)) await writeFile(eventsPath, "", "utf8");
   if (!existsSync(claimsPath)) await writeFile(claimsPath, "", "utf8");
+  if (!existsSync(presencePath)) await writeFile(presencePath, `${JSON.stringify({ schema_version: VERSION, sessions: [] }, null, 2)}\n`, "utf8");
   process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: { root } }, null, 2)}\n`);
+}
+
+async function presence() {
+  await mkdir(root, { recursive: true });
+  const agentId = option("agent");
+  const sessionId = option("session");
+  const runtimeId = option("runtime", "generic-agent");
+  const status = option("status", "active");
+  const ttl = Number(option("ttl", "120"));
+  if (!agentId || !sessionId) fail("PRESENCE_ID_REQUIRED", "Pass --agent and --session", "presence");
+  if (!new Set(["active", "idle", "stopped"]).has(status)) fail("PRESENCE_STATUS_INVALID", "Use active, idle, or stopped", "status");
+  if (!Number.isFinite(ttl) || ttl < 15 || ttl > 3600) fail("PRESENCE_TTL_INVALID", "TTL must be between 15 and 3600 seconds", "ttl");
+  const now = new Date();
+  const expiresAt = status === "stopped" ? now : new Date(now.getTime() + ttl * 1000);
+  const taskId = option("task-id");
+  const taskSummary = option("summary");
+  const update = {
+    schema_version: VERSION,
+    session_id: sessionId,
+    agent_id: agentId,
+    runtime: { id: runtimeId },
+    status,
+    observed_at: now.toISOString(),
+    expires_at: expiresAt.toISOString(),
+    ...(taskId && taskSummary ? { current_task: { id: taskId, summary: taskSummary } } : {})
+  };
+  const document = existsSync(presencePath)
+    ? JSON.parse(await readFile(presencePath, "utf8"))
+    : { schema_version: VERSION, sessions: [] };
+  const sessions = document.sessions.filter((item) => item.session_id !== sessionId && new Date(item.expires_at).getTime() > now.getTime());
+  if (status !== "stopped") sessions.push(update);
+  await writeFile(presencePath, `${JSON.stringify({ schema_version: VERSION, sessions }, null, 2)}\n`, "utf8");
+  process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: update, next_actions: [] }, null, 2)}\n`);
 }
 
 async function context() {
@@ -174,6 +210,6 @@ async function claim() {
   process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: { claim_id: claim.claim_id, status: "pending_human_review", message: "Continue the primary task; achievement review is non-blocking." }, next_actions: [] }, null, 2)}\n`);
 }
 
-const commands = { init, define, track, context, report, claim };
-if (!commands[command]) fail("COMMAND_UNKNOWN", "Use init, define, track, context, report, or claim", "command");
+const commands = { init, presence, define, track, context, report, claim };
+if (!commands[command]) fail("COMMAND_UNKNOWN", "Use init, presence, define, track, context, report, or claim", "command");
 await commands[command]();
