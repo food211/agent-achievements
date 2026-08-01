@@ -58,7 +58,17 @@ Mark a still-open session idle when more user work may arrive, or stopped when t
 node <skill-path>/scripts/achievement-cli.mjs presence --agent <agent-id> --session <session-id> --runtime <runtime-id> --status idle
 ```
 
-Presence only controls companion visibility. It is not achievement evidence by itself.
+Presence controls the companion's awake, working, and sleeping state. It is not achievement evidence by itself.
+
+## Companion appearance
+
+The companion defaults to an animated living trophy. Only when the user explicitly asks for a custom companion image, use an available image-generation capability or a user-provided file. Prefer a square PNG or WebP with a transparent or simple background, a readable silhouette, and no text. Install it with:
+
+```powershell
+node <skill-path>/scripts/achievement-cli.mjs avatar --input <png-jpg-webp-or-svg>
+```
+
+The companion detects the new image automatically. Restore the default trophy with `avatar --reset`. Never replace the user's avatar merely to pursue an achievement.
 
 ## Reporting to the user
 

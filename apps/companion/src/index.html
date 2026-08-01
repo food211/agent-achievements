@@ -7,13 +7,31 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <button class="pet-shell drag" id="pet" aria-label="展开 Agent 成就">
-      <span class="aura"><i class="eye left"></i><i class="eye right"></i><i class="smile"></i></span>
-      <span class="spark one">✦</span><span class="spark two">·</span>
+    <button class="pet-shell" id="pet" aria-label="展开 Agent 成就" title="Agent 成就">
+      <span class="avatar" aria-hidden="true">
+        <img id="customAvatar" alt="" hidden />
+        <svg id="defaultAvatar" class="trophy" viewBox="0 0 64 64">
+          <defs>
+            <linearGradient id="cupGold" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#fff1a8"/><stop offset=".42" stop-color="#ffc94f"/><stop offset="1" stop-color="#d98214"/>
+            </linearGradient>
+          </defs>
+          <g class="trophy-body">
+            <path class="trophy-handle left" d="M20 15H11v4c0 8 5 13 13 13" fill="none" stroke="#f3ad2f" stroke-width="5" stroke-linecap="round"/>
+            <path class="trophy-handle right" d="M44 15h9v4c0 8-5 13-13 13" fill="none" stroke="#f3ad2f" stroke-width="5" stroke-linecap="round"/>
+            <path d="M20 10h24v9c0 11-5 19-12 19s-12-8-12-19z" fill="url(#cupGold)"/>
+            <path d="M29 37h6v10h-6zM21 48h22v7H21z" fill="url(#cupGold)"/>
+            <ellipse class="trophy-eye left" cx="27" cy="23" rx="2" ry="2.6" fill="#5a340e"/>
+            <ellipse class="trophy-eye right" cx="37" cy="23" rx="2" ry="2.6" fill="#5a340e"/>
+            <path class="trophy-mouth" d="M28 29c2.4 2.3 5.6 2.3 8 0" fill="none" stroke="#75430e" stroke-width="1.6" stroke-linecap="round"/>
+            <path class="trophy-shine" d="M25 14h8" fill="none" stroke="#fff4bc" stroke-width="2" stroke-linecap="round" opacity=".85"/>
+          </g>
+        </svg>
+        <span class="pet-spark one">✦</span><span class="pet-spark two">✦</span>
+      </span>
       <span class="status-dot"></span>
-      <strong id="agentName">Agent 醒着</strong>
-      <small id="petHint">点我看看今天的成就</small>
     </button>
+    <div class="drag-handle drag" id="dragHandle" title="按住拖动桌宠"><span>拖动</span></div>
 
     <section class="panel" id="panel" aria-hidden="true">
       <header class="drag">
@@ -21,6 +39,17 @@
         <button class="no-drag close" id="close" aria-label="收起">×</button>
       </header>
       <div class="mood"><span>✦</span><p id="taskSummary">等待任务状态…</p></div>
+      <div class="appearance">
+        <div><b>伙伴形象</b><small id="avatarHint">默认奖杯</small></div>
+        <div class="appearance-actions no-drag">
+          <button id="chooseAvatar">选择图片</button>
+          <button id="resetAvatar">恢复奖杯</button>
+        </div>
+      </div>
+      <label class="autostart no-drag">
+        <span><b>开机常驻</b><small>登录电脑后自动启动，离线时奖杯会睡觉</small></span>
+        <input id="autostart" type="checkbox" />
+      </label>
       <div class="section-title"><span>正在追踪</span><small>主动目标</small></div>
       <div id="tracked" class="cards"></div>
       <div class="section-title"><span>最近获得</span><small>人的认可</small></div>
@@ -31,4 +60,3 @@
     <script src="renderer.js"></script>
   </body>
 </html>
-

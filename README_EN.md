@@ -18,14 +18,27 @@ The first integration is [Wuxing Agent Harness](./examples/wuxing-harness/README
 
 ## Desktop companion
 
-The desktop companion follows the lifecycle of any installed agent through the runtime-neutral `presence` heartbeat. It does not inspect Codex-specific process names:
+The living trophy follows the lifecycle of any installed agent through the runtime-neutral `presence` heartbeat. It does not inspect Codex-specific process names:
 
-- it wakes when an agent session starts or performs work;
+- it stays visible, breathes and sleeps, and uses presence to show whether an agent is active;
 - it can display the identity and current task of connected agents;
 - it sleeps when heartbeats expire or sessions stop;
 - it expands to show tracked goals, progress, and recent human recognition.
+- its bottom edge is a dedicated drag handle with a hover cue, while the trophy remains a click-only target;
+- it snaps to any screen edge, retreats to a small peek, and reveals itself on hover;
+- it celebrates new achievements and offers an explicit launch-at-login toggle.
+
+Window geometry and typography use system DIPs, and the companion repositions itself when display scale metrics change.
 
 The companion and the Skill share normalized state in `~/.agent-achievements`. Set `AGENT_ACHIEVEMENTS_HOME` to isolate a profile or workspace.
+
+Choose a custom image in the expanded panel, or let an agent install a generated image with:
+
+```powershell
+node skills/use-agent-achievements/scripts/achievement-cli.mjs avatar --input <image-path>
+```
+
+PNG, JPG, WebP, and SVG files up to 5 MB are supported. Use `avatar --reset` to restore the trophy.
 
 ## Repository map
 

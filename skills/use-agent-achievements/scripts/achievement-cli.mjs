@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +11,7 @@ const statePath = path.join(root, "state.json");
 const eventsPath = path.join(root, "events.jsonl");
 const claimsPath = path.join(root, "claims.jsonl");
 const presencePath = path.join(root, "presence.json");
+const avatarExtensions = ["png", "jpg", "jpeg", "webp", "svg"];
 
 const args = process.argv.slice(2);
 const command = args.shift();
@@ -89,6 +90,28 @@ async function presence() {
   if (status !== "stopped") sessions.push(update);
   await writeFile(presencePath, `${JSON.stringify({ schema_version: VERSION, sessions }, null, 2)}\n`, "utf8");
   process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: update, next_actions: [] }, null, 2)}\n`);
+}
+
+async function avatar() {
+  await mkdir(root, { recursive: true });
+  const targets = avatarExtensions.map((ext) => path.join(root, `avatar.${ext}`));
+  if (args.includes("--reset")) {
+    await Promise.all(targets.map((target) => rm(target, { force: true })));
+    process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: { avatar: "default-trophy" }, next_actions: [] }, null, 2)}\n`);
+    return;
+  }
+  const input = option("input");
+  if (!input) fail("AVATAR_INPUT_REQUIRED", "Pass an image with --input, or use --reset", "input");
+  const source = path.resolve(input);
+  const ext = path.extname(source).slice(1).toLowerCase();
+  if (!avatarExtensions.includes(ext)) fail("AVATAR_FORMAT_UNSUPPORTED", "Use png, jpg, jpeg, webp, or svg", "input");
+  const info = await stat(source).catch(() => null);
+  if (!info?.isFile()) fail("AVATAR_NOT_FOUND", `Image not found: ${source}`, "input");
+  if (info.size > 5 * 1024 * 1024) fail("AVATAR_TOO_LARGE", "Avatar must be 5 MB or smaller", "input");
+  await Promise.all(targets.map((target) => rm(target, { force: true })));
+  const target = path.join(root, `avatar.${ext}`);
+  await copyFile(source, target);
+  process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: { avatar: target }, next_actions: [] }, null, 2)}\n`);
 }
 
 async function context() {
@@ -210,6 +233,6 @@ async function claim() {
   process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: { claim_id: claim.claim_id, status: "pending_human_review", message: "Continue the primary task; achievement review is non-blocking." }, next_actions: [] }, null, 2)}\n`);
 }
 
-const commands = { init, presence, define, track, context, report, claim };
-if (!commands[command]) fail("COMMAND_UNKNOWN", "Use init, presence, define, track, context, report, or claim", "command");
+const commands = { init, presence, avatar, define, track, context, report, claim };
+if (!commands[command]) fail("COMMAND_UNKNOWN", "Use init, presence, avatar, define, track, context, report, or claim", "command");
 await commands[command]();
