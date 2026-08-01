@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ebe7dc" />
+    <title>五行创作助手</title>
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="masthead">
+        <div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>文</span></div>
+        <div><small>WUXING CREATION HARNESS</small><h1>五行创作调控</h1><p>调那个还差一点</p></div>
+        <div class="masthead-tools"><span class="boundary">只看这一稿</span><button id="themeToggle" type="button" aria-label="切换深浅主题">深色</button></div>
+      </header>
+
+      <section class="workspace">
+        <article class="paper source-card">
+          <div class="section-label"><span>01</span><b>原文</b><small>把那段还差一点的文字放进来</small></div>
+          <textarea id="sourceText" aria-label="需要诊断的原文"></textarea>
+          <button class="primary" id="diagnose">看看差在哪</button>
+          <p class="message" id="message" role="status"></p>
+        </article>
+
+        <article class="paper terrain-card">
+          <div class="section-label"><span>02</span><b>这一稿怎么了</b><small>每个判断都能在原文里找到</small></div>
+          <div class="terrain" id="terrain" data-focus="none">
+            <svg viewBox="0 0 400 230" role="img" aria-label="由五种创作力量构成的抽象文字地形">
+              <path class="land earth" d="M18 186C72 151 110 159 154 130c45-30 83-31 126-8 42 22 67 9 102-18v104H18Z"/>
+              <path class="stream water" d="M20 59c66 2 72 72 138 66 59-5 64-71 127-55 46 12 54 55 98 52"/>
+              <path class="branch wood" d="M150 132c-7-50 11-85 52-111m-39 75c27-8 47-26 57-51m-62 26c-17-6-29-18-36-34"/>
+              <path class="flame fire" d="M275 126c-29-38 16-48 5-86 41 31 36 62 12 88"/>
+              <path class="cut metal" d="M70 165 330 79"/>
+              <circle class="spirit" cx="202" cy="126" r="23"/><circle class="eye" cx="194" cy="123" r="2"/><circle class="eye" cx="210" cy="123" r="2"/><path class="mouth" d="M196 132c4 3 8 3 12 0"/>
+            </svg>
+            <div class="element-labels"><span data-action="water">水<small>现实感知</small></span><span data-action="wood">木<small>新的可能</small></span><span data-action="fire">火<small>表达推进</small></span><span data-action="earth">土<small>事实结构</small></span><span data-action="metal">金<small>取舍边界</small></span></div>
+          </div>
+          <div class="diagnosis empty-state" id="diagnosis"><b>从原文开始</b><p>放进一段文字，我先找出最值得动的地方。</p></div>
+          <div class="actions" id="actions"></div>
+        </article>
+
+        <article class="paper revision-card">
+          <div class="section-label"><span>03</span><b>改过以后</b><small>一次只动一处</small></div>
+          <div class="revision empty-state" id="revision"><b>还没动笔</b><p>选一个动作，右边马上换一稿。</p></div>
+          <div class="judgment" id="judgment" hidden>
+            <small>这次我记住什么</small><blockquote id="learnedJudgment"></blockquote>
+            <div id="judgmentActions"><button class="primary" id="accept">记住这个</button><button id="reject">不是这个</button></div>
+            <p class="judgment-result" id="judgmentResult" role="status"></p>
+          </div>
+        </article>
+      </section>
+
+      <section class="preference-trail">
+        <div><small>YOUR CREATIVE PREFERENCE</small><h2>我记住的偏好</h2></div>
+        <div class="preferences" id="preferences"><p>你收下的判断会先放在这里。相似的选择多了，我才会把它当成偏好。</p></div>
+      </section>
+    </main>
+  </body>
+</html>

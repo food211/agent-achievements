@@ -3,28 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Agent Achievements Companion</title>
+    <title>五行创作助手</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <button class="pet-shell" id="pet" aria-label="展开 Agent 成就" title="Agent 成就">
+    <button class="pet-shell" id="pet" aria-label="展开五行创作助手" title="五行创作助手">
       <span class="avatar" aria-hidden="true">
         <img id="customAvatar" alt="" hidden />
-        <svg id="defaultAvatar" class="trophy" viewBox="0 0 64 64">
+        <svg id="defaultAvatar" class="trophy wuxing-spirit" viewBox="0 0 64 64">
           <defs>
-            <linearGradient id="cupGold" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#fff1a8"/><stop offset=".42" stop-color="#ffc94f"/><stop offset="1" stop-color="#d98214"/>
+            <linearGradient id="spiritPaper" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#fff9e9"/><stop offset=".62" stop-color="#e8dfc9"/><stop offset="1" stop-color="#cbbd9e"/>
             </linearGradient>
           </defs>
           <g class="trophy-body">
-            <path class="trophy-handle left" d="M20 15H11v4c0 8 5 13 13 13" fill="none" stroke="#f3ad2f" stroke-width="5" stroke-linecap="round"/>
-            <path class="trophy-handle right" d="M44 15h9v4c0 8-5 13-13 13" fill="none" stroke="#f3ad2f" stroke-width="5" stroke-linecap="round"/>
-            <path d="M20 10h24v9c0 11-5 19-12 19s-12-8-12-19z" fill="url(#cupGold)"/>
-            <path d="M29 37h6v10h-6zM21 48h22v7H21z" fill="url(#cupGold)"/>
-            <ellipse class="trophy-eye left" cx="27" cy="23" rx="2" ry="2.6" fill="#5a340e"/>
-            <ellipse class="trophy-eye right" cx="37" cy="23" rx="2" ry="2.6" fill="#5a340e"/>
-            <path class="trophy-mouth" d="M28 29c2.4 2.3 5.6 2.3 8 0" fill="none" stroke="#75430e" stroke-width="1.6" stroke-linecap="round"/>
-            <path class="trophy-shine" d="M25 14h8" fill="none" stroke="#fff4bc" stroke-width="2" stroke-linecap="round" opacity=".85"/>
+            <path d="M17 20c1-7 8-11 15-11s14 4 15 11l3 21c1 8-6 14-18 14S13 49 14 41Z" fill="url(#spiritPaper)" stroke="#35584a" stroke-width="2"/>
+            <path class="trophy-handle left" d="M16 30c-6 1-8 5-8 10" fill="none" stroke="#35584a" stroke-width="4" stroke-linecap="round"/>
+            <path class="trophy-handle right" d="M48 30c6 1 8 5 8 10" fill="none" stroke="#35584a" stroke-width="4" stroke-linecap="round"/>
+            <path d="M20 18c-3-5-2-9 1-12 5 3 6 7 4 12" fill="#6ba9b6"/><path d="M25 15c0-7 3-11 7-13 3 5 2 10-1 14" fill="#6e9b70"/><path d="M32 15c2-7 7-9 9-13 3 7 1 11-3 16" fill="#bc5542"/><rect x="40" y="9" width="8" height="9" rx="2" fill="#a58351"/><path d="m47 18 8-9" stroke="#aeb6b3" stroke-width="5" stroke-linecap="round"/>
+            <ellipse class="trophy-eye left" cx="26" cy="31" rx="2" ry="2.6" fill="#29483d"/>
+            <ellipse class="trophy-eye right" cx="38" cy="31" rx="2" ry="2.6" fill="#29483d"/>
+            <path class="trophy-mouth" d="M27 38c3 2.5 7 2.5 10 0" fill="none" stroke="#8e4d3e" stroke-width="1.6" stroke-linecap="round"/>
+            <path class="trophy-shine" d="M20 24c5-4 9-5 14-4" fill="none" stroke="#fffdf4" stroke-width="2" stroke-linecap="round" opacity=".8"/>
           </g>
         </svg>
         <span class="pet-spark one">✦</span><span class="pet-spark two">✦</span>
@@ -34,17 +34,19 @@
     <section class="panel" id="panel" aria-hidden="true">
       <div class="panel-drag-cap drag" title="按住拖动窗口" aria-hidden="true"></div>
       <header class="drag">
-        <div><small>AGENT COMPANION</small><h1 id="panelAgent">你的 Agent 正在工作</h1></div>
-        <button class="no-drag close" id="close" aria-label="收起">×</button>
+        <div><small>五行创作助手</small><h1 id="panelAgent">Agent 正在工作</h1></div>
+        <div class="header-actions no-drag"><button id="companionTheme" aria-label="切换到浅色主题">浅色</button><button class="close" id="close" aria-label="收起">×</button></div>
       </header>
-      <div class="mood"><span>✦</span><p id="taskSummary">等待任务状态…</p></div>
+      <nav class="primary-actions no-drag" aria-label="主要功能">
+        <button class="primary-action wuxing-action" id="openWuxing"><span>文</span>五行调稿</button>
+        <button class="primary-action achievement-action" id="openForge"><span>✦</span>编辑成就</button>
+      </nav>
       <div class="achievement-head">
         <div><small>ACHIEVEMENT COLLECTION</small><b>成就图鉴</b><span><i id="collectionCount">0 项成就</i> · <i id="totalScore">0 积分</i></span></div>
-        <button class="forge-button no-drag" id="openForge"><span>✦</span> 编辑成就</button>
       </div>
       <section class="diagnostic-card no-drag" id="diagnosticCard">
         <div class="diagnostic-mark">✦</div>
-        <div><small>FIRST ACHIEVEMENT SETTLEMENT</small><b>回顾 Agent 已经做成的好事</b><p id="diagnosticSummary">桌宠会请 Agent 检查 Skill、规则和真实成果，只奖励有证据的正向改变。</p></div>
+        <div><small>FIRST ACHIEVEMENT SETTLEMENT</small><b>翻翻以前做成的事</b><p id="diagnosticSummary">让 Agent 看看以前留下的成果，有结果的才记下来。</p></div>
         <button id="requestDiagnostic">开始回顾</button>
         <div class="diagnostic-discoveries" id="diagnosticDiscoveries"></div>
       </section>
@@ -55,7 +57,7 @@
       <div id="catalog" class="catalog"></div>
       <p class="tracking-message" id="trackingMessage" role="status"></p>
       <div class="autostart no-drag">
-        <span><b>主动追踪</b><small>最多 3 项，Agent 会看到人的鼓励，但任务本身永远优先</small></span>
+        <span><b>主动追踪</b><small>最多 3 项，Agent 做事时会看到你的鼓励</small></span>
       </div>
       <div id="tracked" class="cards"></div>
       <div class="section-title"><span>最近获得</span><small>人的认可</small></div>
@@ -63,29 +65,33 @@
       <details class="companion-settings no-drag">
         <summary>桌面伙伴设置</summary>
         <div class="appearance">
-          <div><b>伙伴形象</b><small id="avatarHint">默认奖杯</small></div>
+          <div><b>伙伴形象</b><small id="avatarHint">默认五行助手</small></div>
           <div class="appearance-actions">
             <button id="chooseAvatar">选择图片</button>
-            <button id="resetAvatar">恢复奖杯</button>
+            <button id="resetAvatar">恢复五行助手</button>
           </div>
         </div>
         <label class="autostart setting-toggle">
-          <span><b>开机常驻</b><small>登录电脑后自动启动，离线时奖杯会睡觉</small></span>
+          <span><b>开机常驻</b><small>登录电脑后自动启动，没任务时助手会安静等着</small></span>
           <input id="autostart" type="checkbox" />
         </label>
+        <label class="autostart setting-toggle">
+          <span><b>窗口置顶</b><small>让桌宠浮在其他窗口上方，也可从系统托盘切换</small></span>
+          <input id="alwaysOnTop" type="checkbox" />
+        </label>
       </details>
-      <footer>规则与正确性，永远比成就优先。</footer>
+      <footer>先把事情做好，再谈成就。</footer>
 
       <section class="forge no-drag" id="forge" aria-hidden="true">
         <div class="forge-title">
           <div><small>ACHIEVEMENT WORKSHOP</small><h2 id="editorTitle">编辑成就</h2></div>
           <div class="forge-title-actions"><button id="newAchievement" title="新建成就">＋</button><button id="closeForge" aria-label="关闭成就编辑器">×</button></div>
         </div>
-        <p class="forge-intro">这里管理用户创建的成就。系统根据 Skill 成果发现的成就会保留来源与证据，不在这里修改。</p>
+        <p class="forge-intro">你建的成就在这里改。Agent 从过往成果里找到的成就，只能查看。</p>
         <section class="ai-designer">
-          <div><span>✦</span><b>让 Agent 帮我设计</b><small>描述你想鼓励的行为，Agent 会返回一份可编辑草案</small></div>
+          <div><span>✦</span><b>让 Agent 帮我设计</b><small>说说你想鼓励什么，Agent 会先写一份草案</small></div>
           <textarea id="designBrief" maxlength="1000" placeholder="例如：我希望 Agent 遇到产品边界时，能先分析影响再询问我"></textarea>
-          <button id="requestDesign" type="button">委托 Agent 设计</button>
+          <button id="requestDesign" type="button">请 Agent 起草</button>
           <div class="design-requests" id="designRequests"></div>
           <p id="designMessage" class="form-message" role="status"></p>
         </section>
@@ -96,14 +102,14 @@
           <div class="badge-preview"><span id="badgePreview">🥉</span><div><b id="titlePreview">新的成就</b><small id="rarityPreview">铜牌 · 10 分</small></div></div>
           <label>徽章等级<select name="tier"><option value="bronze">🥉 铜牌 · 10 分</option><option value="silver">🥈 银牌 · 30 分</option><option value="gold">🥇 金牌 · 100 分</option></select></label>
           <label>成就名称<input name="title" maxlength="80" required placeholder="例如：产品守门员" /></label>
-          <label>希望 Agent 做到什么<textarea name="intent" maxlength="400" required placeholder="描述值得鼓励的判断或行为"></textarea></label>
+          <label>希望 Agent 做到什么<textarea name="intent" maxlength="400" required placeholder="写下你想鼓励的做法"></textarea></label>
           <div class="form-row">
             <label>达成事件<select name="event_type"><option value="task.completed">完成任务</option><option value="verification.completed">完成验证</option><option value="judgment.requested">正确请求人的判断</option><option value="evidence.collected">收集有效证据</option><option value="rule.revised">修正规则</option></select></label>
             <label>目标次数<input name="target" type="number" min="1" max="999" value="3" required /></label>
           </div>
-          <label>给 Agent 的鼓励<input name="encouragement" maxlength="400" placeholder="追踪时会展示给 Agent" /></label>
+          <label>给 Agent 的话<input name="encouragement" maxlength="400" placeholder="追踪时，Agent 会看到这句话" /></label>
           <label>不可越过的边界<textarea name="guardrails" maxlength="1600" placeholder="每行一条，例如：不得为了成就扩大任务范围"></textarea></label>
-          <label class="track-choice"><input name="track" type="checkbox" checked /><span><b>创建后主动追踪</b><small>让 Agent 在工作时看到这项挑战</small></span></label>
+          <label class="track-choice"><input name="track" type="checkbox" checked /><span><b>创建后开始追踪</b><small>Agent 做事时会看到它</small></span></label>
           <p class="form-message" id="formMessage" role="status"></p>
           <button class="create-button" id="saveAchievement" type="submit">保存成就</button>
         </form>

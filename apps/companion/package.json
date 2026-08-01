@@ -1,5 +1,6 @@
 {
   "name": "@agent-achievements/companion",
+  "productName": "五行创作助手",
   "version": "0.1.0",
   "private": true,
   "description": "A desktop companion that follows any Agent Achievements presence heartbeat.",

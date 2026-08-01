@@ -17,9 +17,14 @@ const SNAP_DISTANCE = 34;
 const EDGE_PEEK = 30;
 const AVATAR_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "svg"];
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
-const TRAY_ICON_PATH = path.join(__dirname, "tray-icon.svg");
+const TRAY_ICON_PATH = path.join(__dirname, process.platform === "win32" ? "tray-icon.ico" : "tray-icon.png");
+const APP_DISPLAY_NAME = "五行创作助手";
+const WUXING_ASSISTANT_URL = process.env.WUXING_ASSISTANT_URL || "http://127.0.0.1:4318";
+
+app.setName(APP_DISPLAY_NAME);
 
 let window;
+let wuxingWindow;
 let tray;
 let expanded = false;
 let lastPayload = "";
@@ -30,7 +35,7 @@ let petDrag = null;
 let collapsedRestoreBounds = null;
 let transitionFallback;
 let avatarCache = { key: "", value: null };
-let companionSettings = readJson(SETTINGS_PATH, { dock: null, free_bounds: null });
+let companionSettings = readJson(SETTINGS_PATH, { dock: null, free_bounds: null, always_on_top: true });
 
 function readJson(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; }
@@ -427,10 +432,43 @@ function setAutostart(enabled) {
   return getAutostart();
 }
 
+function getAlwaysOnTop() { return companionSettings.always_on_top !== false; }
+
+function setAlwaysOnTop(enabled) {
+  companionSettings = { ...companionSettings, always_on_top: Boolean(enabled) };
+  writeSettings();
+  if (window && !window.isDestroyed()) window.setAlwaysOnTop(Boolean(enabled), "floating");
+  if (window && !window.isDestroyed()) window.webContents.send("companion:always-on-top", getAlwaysOnTop());
+  if (tray) refreshTrayMenu();
+  return getAlwaysOnTop();
+}
+
+function openWuxingAssistant() {
+  if (wuxingWindow && !wuxingWindow.isDestroyed()) {
+    wuxingWindow.show();
+    wuxingWindow.focus();
+    return;
+  }
+  wuxingWindow = new BrowserWindow({
+    width: 1180,
+    height: 800,
+    minWidth: 760,
+    minHeight: 620,
+    title: APP_DISPLAY_NAME,
+    backgroundColor: "#e9e6dc",
+    autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
+  });
+  wuxingWindow.loadURL(WUXING_ASSISTANT_URL);
+  wuxingWindow.on("closed", () => { wuxingWindow = null; });
+}
+
 function refreshTrayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
+    { label: "打开五行创作", click: openWuxingAssistant },
     { label: "显示桌面伙伴", click: () => { window.showInactive(); revealFromEdge(); } },
     { label: "打开成就目录", click: () => shell.openPath(DATA_HOME) },
+    { label: "窗口置顶", type: "checkbox", checked: getAlwaysOnTop(), click: (item) => setAlwaysOnTop(item.checked) },
     { label: "开机常驻", type: "checkbox", checked: getAutostart(), click: (item) => setAutostart(item.checked) },
     { type: "separator" },
     { label: "退出", click: () => { quitting = true; app.quit(); } }
@@ -446,12 +484,12 @@ function createWindow() {
     resizable: false,
     maximizable: false,
     minimizable: false,
-    alwaysOnTop: true,
+    alwaysOnTop: getAlwaysOnTop(),
     skipTaskbar: true,
     hasShadow: false,
     webPreferences: { preload: path.join(__dirname, "preload.cjs"), contextIsolation: true, nodeIntegration: false }
   });
-  window.setAlwaysOnTop(true, "floating");
+  window.setAlwaysOnTop(getAlwaysOnTop(), "floating");
   window.loadFile(path.join(__dirname, "index.html"));
   window.webContents.on("did-finish-load", () => { lastPayload = ""; sync(); });
   window.on("moved", detectSnap);
@@ -467,9 +505,10 @@ function createWindow() {
 }
 
 function createTray() {
-  const icon = nativeImage.createFromPath(TRAY_ICON_PATH).resize({ width: 20, height: 20, quality: "best" });
+  const icon = nativeImage.createFromPath(TRAY_ICON_PATH);
+  if (icon.isEmpty()) throw new Error(`tray-icon-empty:${TRAY_ICON_PATH}`);
   tray = new Tray(icon);
-  tray.setToolTip("Agent Achievements Companion");
+  tray.setToolTip(APP_DISPLAY_NAME);
   refreshTrayMenu();
   tray.on("click", () => { window.showInactive(); revealFromEdge(); });
 }
@@ -497,6 +536,9 @@ if (!hasSingleInstanceLock) {
     ipcMain.handle("companion:reset-avatar", () => { clearAvatarFiles(); sync(); });
     ipcMain.handle("companion:get-autostart", () => getAutostart());
     ipcMain.handle("companion:set-autostart", (_event, enabled) => setAutostart(Boolean(enabled)));
+    ipcMain.handle("companion:get-always-on-top", () => getAlwaysOnTop());
+    ipcMain.handle("companion:set-always-on-top", (_event, enabled) => setAlwaysOnTop(Boolean(enabled)));
+    ipcMain.handle("companion:open-wuxing", () => openWuxingAssistant());
     ipcMain.handle("companion:save-achievement", (_event, input) => saveAchievement(input));
     ipcMain.handle("companion:set-achievement-tracking", (_event, achievementId, enabled) => setAchievementTracking(String(achievementId), Boolean(enabled)));
     ipcMain.handle("companion:request-achievement-design", (_event, brief) => requestAchievementDesign(brief));

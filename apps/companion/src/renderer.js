@@ -8,13 +8,15 @@ const catalog = document.getElementById("catalog");
 const collectionCount = document.getElementById("collectionCount");
 const totalScore = document.getElementById("totalScore");
 const panelAgent = document.getElementById("panelAgent");
-const taskSummary = document.getElementById("taskSummary");
 const customAvatar = document.getElementById("customAvatar");
 const defaultAvatar = document.getElementById("defaultAvatar");
 const avatarHint = document.getElementById("avatarHint");
 const chooseAvatar = document.getElementById("chooseAvatar");
 const resetAvatar = document.getElementById("resetAvatar");
 const autostart = document.getElementById("autostart");
+const alwaysOnTop = document.getElementById("alwaysOnTop");
+const companionTheme = document.getElementById("companionTheme");
+const openWuxing = document.getElementById("openWuxing");
 const openForge = document.getElementById("openForge");
 const closeForge = document.getElementById("closeForge");
 const forge = document.getElementById("forge");
@@ -49,6 +51,19 @@ let editingAchievementId = null;
 let catalogOrigin = "system_discovered";
 let latestDiagnostic = null;
 
+function applyCompanionTheme(theme) {
+  document.body.classList.toggle("theme-light", theme === "light");
+  companionTheme.textContent = theme === "light" ? "深色" : "浅色";
+  companionTheme.setAttribute("aria-label", `切换到${theme === "light" ? "深色" : "浅色"}主题`);
+}
+
+applyCompanionTheme(localStorage.getItem("companion-theme") || "dark");
+companionTheme.addEventListener("click", () => {
+  const next = document.body.classList.contains("theme-light") ? "dark" : "light";
+  localStorage.setItem("companion-theme", next);
+  applyCompanionTheme(next);
+});
+
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 }
@@ -66,7 +81,7 @@ function renderCatalog() {
         ${item.discovery_reason ? `<p class="discovery-reason">${escapeHtml(item.discovery_reason)}</p>` : ""}
         ${item.editable ? `<div class="card-actions"><button data-action="edit" data-id="${escapeHtml(item.id)}">编辑</button><button data-action="track" data-id="${escapeHtml(item.id)}" data-enabled="${String(!item.tracked)}" ${item.tracking_allowed ? "" : "disabled"}>${item.tracked ? "取消追踪" : "追踪"}</button></div>` : ""}
       </article>`).join("")
-    : `<p class='empty collection-empty'>${catalogOrigin === "system_discovered" ? "还没有发现可验证的历史成就。完成初始化回顾后，它们会出现在这里。" : "还没有用户创建的成就，可以从“编辑成就”开始。"}</p>`;
+    : `<p class='empty collection-empty'>${catalogOrigin === "system_discovered" ? "这里还没有以前的成就。点一下“开始回顾”，让 Agent 去找找。" : "这里还没有你创建的成就。"}</p>`;
 }
 
 function renderDiagnostic(diagnostic) {
@@ -74,16 +89,16 @@ function renderDiagnostic(diagnostic) {
   const pending = diagnostic?.pending_discoveries || [];
   diagnosticCard.classList.toggle("complete", diagnostic?.status === "settled");
   if (!diagnostic) {
-    diagnosticSummary.textContent = "桌宠会请 Agent 检查 Skill、规则和真实成果，只奖励有证据的正向改变。";
+    diagnosticSummary.textContent = "让 Agent 看看以前留下的成果，有结果的才记下来。";
     requestDiagnostic.textContent = "开始回顾";
   } else if (diagnostic.status === "pending") {
-    diagnosticSummary.textContent = "诊断请求已进入 Agent 上下文。Agent 会在不打断当前任务的前提下回顾真实成果。";
+    diagnosticSummary.textContent = "已经告诉 Agent 了。它忙完手里的事，就会回来翻一翻。";
     requestDiagnostic.textContent = "等待 Agent";
   } else if (pending.length) {
-    diagnosticSummary.textContent = `已扫描 ${diagnostic.scanned_skills} 个 Skills；高可信成果已自动结算，其余需要你确认。`;
+    diagnosticSummary.textContent = `看过 ${diagnostic.scanned_skills} 个 Skills。有些已经记下，还有一些等你确认。`;
     requestDiagnostic.textContent = "重新回顾";
   } else {
-    diagnosticSummary.textContent = `回顾完成：已扫描 ${diagnostic.scanned_skills} 个 Skills，有证据的成果已经收入图鉴。`;
+    diagnosticSummary.textContent = `看完了 ${diagnostic.scanned_skills} 个 Skills，找到的成果已经放进图鉴。`;
     requestDiagnostic.textContent = "重新回顾";
   }
   requestDiagnostic.disabled = diagnostic?.status === "pending";
@@ -96,19 +111,16 @@ function render(payload) {
   const isIdle = session?.status === "idle";
   const displayName = session ? `${session.agent_id} · ${session.runtime.id}` : "Agent 休息中";
   panelAgent.textContent = displayName;
-  taskSummary.textContent = session?.current_task?.summary || (session
-    ? "Agent 在线，正在等待新的工作事件。"
-    : "伙伴常驻在这里，等待 Agent 的下一次心跳。");
   pet.classList.toggle("online", isActive);
   pet.classList.toggle("idle", isIdle);
   const statusText = isActive ? "Agent 正在工作" : isIdle ? "Agent 正在等待" : "Agent 离线";
-  pet.title = `${statusText} · 点击查看成就`;
+  pet.title = `${statusText} · 点击展开助手`;
   statusDot.title = statusText;
   statusDot.setAttribute("aria-label", statusText);
   customAvatar.hidden = !payload.avatar?.dataUrl;
   defaultAvatar.hidden = Boolean(payload.avatar?.dataUrl);
   if (payload.avatar?.dataUrl && customAvatar.src !== payload.avatar.dataUrl) customAvatar.src = payload.avatar.dataUrl;
-  avatarHint.textContent = payload.avatar?.dataUrl ? "自定义形象 · Agent 也可以替你生成" : "默认小奖杯";
+  avatarHint.textContent = payload.avatar?.dataUrl ? "自定义形象 · Agent 也可以替你生成" : "默认五行助手";
   latestCatalog = payload.catalog;
   latestDesigns = payload.designs || [];
   const unlocked = payload.catalog.filter((item) => item.awarded).length;
@@ -126,7 +138,7 @@ function render(payload) {
         <p>${escapeHtml(item.encouragement)}</p>
         <span class="bar"><i style="width:${Math.min(100, item.current / item.target * 100)}%"></i></span>
       </article>`).join("")
-    : "<p class='empty'>没有主动追踪的成就，Agent 会按任务本身工作。</p>";
+    : "<p class='empty'>还没有追踪中的成就。</p>";
   awards.innerHTML = payload.awards.length
     ? payload.awards.map((item) => `
       <article class="award">
@@ -134,7 +146,7 @@ function render(payload) {
         <p>${escapeHtml(item.human_feedback || "这项工作得到了人的认可。")}</p>
         ${item.source_skill ? `<small>系统发现 · 来自 ${escapeHtml(item.source_skill)}</small>` : ""}
       </article>`).join("")
-    : "<p class='empty'>还没有新奖杯。真实工作会慢慢填满这里。</p>";
+    : "<p class='empty'>最近还没有拿到新成就。</p>";
   const awardSignature = payload.awards.map((item) => item.achievement_id).join("|");
   if (previousAwardSignature !== null && awardSignature !== previousAwardSignature) {
     if (payload.catalog.some((item) => item.origin === "system_discovered")) { catalogOrigin = "system_discovered"; renderCatalog(); }
@@ -194,6 +206,10 @@ chooseAvatar.addEventListener("click", () => window.agentCompanion.chooseAvatar(
 resetAvatar.addEventListener("click", () => window.agentCompanion.resetAvatar());
 autostart.addEventListener("change", () => window.agentCompanion.setAutostart(autostart.checked));
 window.agentCompanion.getAutostart().then((enabled) => { autostart.checked = enabled; });
+alwaysOnTop.addEventListener("change", () => window.agentCompanion.setAlwaysOnTop(alwaysOnTop.checked));
+window.agentCompanion.getAlwaysOnTop().then((enabled) => { alwaysOnTop.checked = enabled; });
+window.agentCompanion.onAlwaysOnTop((enabled) => { alwaysOnTop.checked = enabled; });
+openWuxing.addEventListener("click", () => window.agentCompanion.openWuxing());
 function renderEditorList() {
   const editable = latestCatalog.filter((item) => item.editable);
   editorList.innerHTML = editable.length
@@ -315,7 +331,7 @@ requestDesign.addEventListener("click", async () => {
   try {
     await window.agentCompanion.requestAchievementDesign(designBrief.value);
     designBrief.value = "";
-    designMessage.textContent = "已交给 Agent。下次 Agent 读取成就上下文时会返回草案。";
+    designMessage.textContent = "已经交给 Agent，草案写好后会回到这里。";
   } catch (error) {
     designMessage.textContent = `委托失败：${error.message || "请填写设计目标"}`;
   }
@@ -338,7 +354,7 @@ designRequests.addEventListener("click", (event) => {
   achievementForm.elements.encouragement.value = draft.encouragement;
   achievementForm.elements.guardrails.value = (draft.guardrails || []).join("\n");
   achievementForm.dispatchEvent(new Event("input"));
-  formMessage.textContent = "Agent 草案已载入，请由人确认后保存。";
+  formMessage.textContent = "草案已经放进来，改好后再保存。";
 });
 achievementForm.addEventListener("submit", async (event) => {
   event.preventDefault();

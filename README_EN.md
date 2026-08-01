@@ -1,5 +1,7 @@
 # Agent Achievements
 
+> This monorepo contains two independent systems that can interoperate through protocols: Agent Achievements, and the Wuxing creation-control core and assistant.
+
 [简体中文](./README.md)
 
 **What if AI agents could remember what humans appreciated about their work?**
@@ -35,7 +37,23 @@ The living trophy follows the lifecycle of any installed agent through the runti
 - when a person only knows the behavior they want to encourage, they can ask an installed agent to return a schema-valid, editable achievement draft;
 - it celebrates new achievements and offers an explicit launch-at-login toggle.
 
-On Windows, a dedicated high-contrast living-trophy icon appears in the system tray while the companion stays out of the taskbar.
+On Windows, a dedicated high-contrast living-trophy icon appears in the system tray while the companion stays out of the taskbar. Windows may initially place a new icon in the `^` overflow area; drag it into the notification area to keep it visible.
+
+The companion stays on top by default. You can disable or re-enable this behavior from Appearance & presence or the tray menu; the choice is persisted locally.
+
+The companion can also act as the desktop entry point for Wuxing creation control. “Start tuning” opens the exact same SPA used on the web; the desktop shell only adds dragging, always-on-top, snapping, and tray integration.
+
+## Wuxing creation control
+
+The Wuxing system describes the current draft rather than the author's personality. It supports five explicit interventions and conservatively promotes repeated accepted judgments from candidate to stable preferences.
+
+```bash
+npm install
+npm run build --workspace=@agent-achievements/wuxing-assistant
+npm run wuxing
+```
+
+Open `http://127.0.0.1:4318`. One process serves both the SPA and `/api/wuxing/*`. Real model calls must run in `apps/wuxing-service`; keep API keys in OpenDeploy Secrets or local server environment variables, never in `VITE_*` frontend variables. The Anthropic provider defaults to `claude-opus-5`.
 
 The status light is green while an agent is working, amber while it is waiting after a turn, and gray when no valid session remains. Codex can keep this state current through its official lifecycle hooks:
 

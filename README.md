@@ -1,5 +1,7 @@
 # Agent Achievements · AI 成就系统
 
+> 同一仓库包含两个彼此独立、可通过协议联动的系统：Agent Achievements 成就层，以及五行创作调控内核与助手。
+
 [English](./README_EN.md)
 
 **如果 AI Agent 能记得，人曾经欣赏它怎样工作呢？**
@@ -93,7 +95,29 @@ npm run companion
 
 桌面伙伴默认是一只会呼吸、眨眼、挥动把手并回应 Agent 状态的活奖杯。Agent 心跳只改变它的清醒状态，不再控制显隐；获得新成就时它会庆祝。
 
-Windows 右下角系统托盘会显示独立的高对比度活奖杯图标；桌宠继续常驻，不额外占用任务栏按钮。
+Windows 右下角系统托盘会显示独立的高对比度活奖杯图标；桌宠继续常驻，不额外占用任务栏按钮。Windows 可能会把首次出现的图标放进 `^` 隐藏图标区，可从那里拖到任务栏通知区域。
+
+桌宠默认置顶，也可以在「外观与常驻」或托盘菜单中关闭/重新开启；选择会保存在本机。
+
+桌宠也可以作为五行创作调控的桌面入口。托盘菜单或展开面板中的「开始调控」会打开与线上版本完全相同的 SPA；桌面壳只额外提供拖拽、置顶、吸附和托盘能力。
+
+## 五行创作调控
+
+五行系统不判断作者人格，只描述当前这版作品的状态，并提供五个可操作方向：引水、生枝、点火、落土、修枝。用户接受的判断先成为候选偏好，出现相近选择后才升级为稳定偏好。
+
+```bash
+npm install
+npm run build --workspace=@agent-achievements/wuxing-assistant
+npm run wuxing
+```
+
+打开 `http://127.0.0.1:4318`。同一进程同时提供 SPA 和 `/api/wuxing/*` API；当前 MVP 对默认样本使用可复现的预置 Provider，对其他文本会明确返回证据不足。
+
+真实模型调用必须发生在 `apps/wuxing-service` 服务端。API Key 应保存为 OpenDeploy Secret 或本机环境变量，绝不能使用 `VITE_*` 注入 SPA。Electron 桌宠和浏览器 SPA 都只调用五行后端，不持有模型密钥。当前 Anthropic Provider 默认模型为 `claude-opus-5`。
+
+本地网络需要显式代理时，可仅给服务端设置 `MODEL_HTTPS_PROXY`；OpenDeploy 通常不需要该变量。
+
+环境变量模板见 `apps/wuxing-service/.env.example`。本地已经按 Anthropic 原生 Messages API 和 `claude-opus-5` 接好；当前旧 Key 对应的上游地址在 TLS 握手阶段断开，因此真实调用暂未通过，预置样本模式不受影响。
 
 右下角状态灯区分三种生命周期：绿色表示 Agent 正在工作，琥珀色表示本轮已结束、正在等待，灰色表示没有有效会话。Codex 可以安装官方生命周期 hook 适配器，自动在每轮开始、工具进展、停止和会话结束时更新状态：
 

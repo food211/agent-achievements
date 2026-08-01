@@ -1,0 +1,14 @@
+{
+  "name": "@agent-achievements/wuxing-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "build": "node --check src/server.js"
+  },
+  "dependencies": {
+    "@agent-achievements/wuxing-core": "0.1.0",
+    "undici": "^7.16.0"
+  }
+}

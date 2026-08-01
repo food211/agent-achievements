@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "npm run dev --workspace=@agent-achievements/demo",
     "companion": "npm run start --workspace=@agent-achievements/companion",
+    "wuxing": "npm run start --workspace=@agent-achievements/wuxing-service",
+    "wuxing:dev": "npm run dev --workspace=@agent-achievements/wuxing-assistant",
     "build": "npm run build --workspaces --if-present",
     "test": "node --test tests/*.test.mjs",
     "validate": "npm run test && npm run build"
