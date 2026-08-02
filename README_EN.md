@@ -1,12 +1,10 @@
-# Agent Achievements
+# Wuxing Harness
 
-> This monorepo contains two independent systems that can interoperate through protocols: Agent Achievements, and Wuxing Harness for auditing Agent rules.
+> Install Wuxing Harness in any Agent Skills-compatible Code Agent, revise stale workspace rules, and return human recognition to the next task.
 
 [简体中文](./README.md)
 
-**What if AI agents could remember what humans appreciated about their work?**
-
-Agent Achievements is an open achievement layer for AI agents. Third-party systems report normalized work events, humans define and award evidence-backed achievements, and agents receive a compact view of what they earned and what they are currently encouraged to pursue.
+Wuxing Harness audits accumulated Agent rules against current code, tests, run evidence, and explicit human decisions. Agent Achievements receives verified improvements, lets a human review the evidence, and returns the recognition to later Agent context.
 
 ## Product model
 
@@ -23,7 +21,7 @@ The first integration is [Wuxing Harness](./skills/wuxing-harness/SKILL.md), but
 
 ## Desktop companion
 
-The living trophy follows the lifecycle of any installed agent through the runtime-neutral `presence` heartbeat. It does not inspect Codex-specific process names:
+The desktop companion runs independently from every Code Agent. Any installed Skill can connect through the runtime-neutral `presence` heartbeat; the companion does not inspect vendor process names:
 
 - it stays visible, breathes and sleeps, and uses presence to show whether an agent is active;
 - it can display the identity and current task of connected agents;
@@ -37,7 +35,7 @@ The living trophy follows the lifecycle of any installed agent through the runti
 - when a person only knows the behavior they want to encourage, they can ask an installed agent to return a schema-valid, editable achievement draft;
 - it celebrates new achievements and offers an explicit launch-at-login toggle.
 
-On Windows, a dedicated high-contrast living-trophy icon appears in the system tray while the companion stays out of the taskbar. Windows may initially place a new icon in the `^` overflow area; drag it into the notification area to keep it visible.
+On Windows, a five-element circle appears in the system tray while the companion stays out of the taskbar. Windows may initially place a new icon in the `^` overflow area; drag it into the notification area to keep it visible.
 
 The companion stays on top by default. You can disable or re-enable this behavior from Appearance & presence or the tray menu; the choice is persisted locally.
 
@@ -81,7 +79,7 @@ Choose a custom image in the expanded panel, or let an agent install a generated
 node skills/use-agent-achievements/scripts/achievement-cli.mjs avatar --input <image-path>
 ```
 
-PNG, JPG, WebP, and SVG files up to 5 MB are supported. Use `avatar --reset` to restore the trophy.
+PNG, JPG, WebP, and SVG files up to 5 MB are supported. Use `avatar --reset` to restore the animated five-element assistant.
 
 ## Repository map
 
@@ -110,6 +108,34 @@ Start the desktop companion:
 ```powershell
 npm run companion
 ```
+
+Install both portable Skills into the cross-client `~/.agents/skills` directory:
+
+The recommended path is to ask the current Coding Agent to adapt itself. Give it this task:
+
+```text
+Install Wuxing Harness from https://github.com/food211/harness-assistant. Read docs/code-agent-adapter-contract.md first, discover your actual Skills directory and lifecycle capabilities, then install wuxing-harness and use-agent-achievements as sibling Skills. Do not assume you are Codex or change the portable protocol to fit the host. If no lifecycle hook exists, use the generic presence command. Verify Skill discovery, achievement initialization, and achievement_sync.status = ready, then report the host-specific adaptation and validation results.
+```
+
+The repository installer is the lower-level copy mechanism:
+
+```powershell
+npm run install:skills
+```
+
+For a Code Agent with a client-specific Skills directory, pass it explicitly:
+
+```powershell
+npm run install:skills -- --target <agent-skills-directory>
+```
+
+For one workspace, install into `<workspace>/.agents/skills`:
+
+```powershell
+npm run install:skills -- --project <workspace-directory>
+```
+
+Host-specific lifecycle hooks are optional. Without one, the Skill sends the same portable `presence` heartbeat directly. The bundled Codex adapter is a convenience, not a dependency.
 
 Run validation:
 

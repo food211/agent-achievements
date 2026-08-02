@@ -2,7 +2,7 @@
   "name": "agent-achievements",
   "version": "0.1.0",
   "private": true,
-  "description": "An open achievement layer for AI agents.",
+  "description": "A portable Wuxing rule-audit and recognition companion for Code Agents.",
   "type": "module",
   "workspaces": [
     "apps/*",
@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "npm run dev --workspace=@agent-achievements/demo",
     "companion": "npm run start --workspace=@agent-achievements/companion",
+    "install:skills": "node scripts/install-agent-skills.mjs",
     "wuxing": "npm run start --workspace=@agent-achievements/wuxing-service",
     "wuxing:dev": "npm run dev --workspace=@agent-achievements/wuxing-assistant",
     "build": "npm run build --workspaces --if-present",

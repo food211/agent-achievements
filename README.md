@@ -1,8 +1,8 @@
 # 五行 Harness
 
-> 帮 AI Agent 检查已经积累的规则，让过时规则得到修订，并把人的认可带回下一次协作。
+> 安装在任何 Code Agent 上，检查已经积累的规则，让过时规则得到修订，并把人的认可带回下一次协作。
 
-[English](./README_EN.md) · [在线演示](https://wuxing-creation-harness.misakiff14.chatgpt.site) · [安装说明](https://wuxing-creation-harness.misakiff14.chatgpt.site/install)
+[English](./README_EN.md) · [在线演示](https://wuxing-creation-harness.misakiff14.chatgpt.site)
 
 用 Agent 做久了，工作区里会慢慢积累很多 Skill、Rule、模板和提示词。它们记录了过去踩过的坑，也可能在版本迭代后失去原来的前提。Agent 通常会继续遵守这些规则，很少主动问一句：这条现在还对吗？
 
@@ -62,7 +62,7 @@ Agent 可以提交成就申请，不能给自己颁奖。申请必须带上可�
 
 ## 五行桌面助手
 
-桌面助手是两个系统共用的交互入口：
+桌面助手是独立运行的 Electron 程序，也是两个系统共用的交互入口。它不依赖 Codex、Claude Code 或其他 Agent 进程才能启动：
 
 - 查看 Agent 当前是否活跃；
 - 打开规则体检；
@@ -75,14 +75,13 @@ Agent 可以提交成就申请，不能给自己颁奖。申请必须带上可�
 
 助手支持窗口置顶、全身拖动、跨显示器缩放和边缘吸附。靠近屏幕左侧、右侧或顶部时会缩回边缘，鼠标移上去后重新展开；底部不会触发吸附。展开和关闭面板不会改变浮窗原来的位置。
 
-任何安装了 Skill 的 Agent 都可以通过标准 `presence` 心跳唤醒助手，不绑定 Codex 或 Claude Code。多个 Agent 可以同时上报自己的身份和任务状态。
+任何支持 [Agent Skills](https://agentskills.io/) 的 Code Agent 都可以接入。两份 Skill 使用相同的开放目录格式，通过标准 `presence` 心跳和 `agent-achievements/v1` 协议与助手通信。多个 Agent 可以同时上报身份和任务状态。
 
 ## 在线演示与本地运行
 
 公开演示展示的是完整交互流程，不读取访客本机文件，也不需要模型 API Key：
 
 - [打开五行 Harness 演示](https://wuxing-creation-harness.misakiff14.chatgpt.site)
-- [查看安装说明](https://wuxing-creation-harness.misakiff14.chatgpt.site/install)
 
 本地运行需要 Node.js 20 或更高版本：
 
@@ -100,14 +99,37 @@ npm run wuxing
 
 打开 `http://127.0.0.1:4318`。
 
-## 安装两个 Skill
+## 安装到任何 Code Agent
 
-五行闭环需要安装两个相邻的 Skill。一个负责规则审查，另一个负责成就协议和 Agent 上下文。
+五行闭环包含两个相邻的 Skill：`wuxing-harness` 负责规则审查，`use-agent-achievements` 负责成就协议和 Agent 上下文。默认安装到跨客户端约定的 `~/.agents/skills`：
+
+推荐把下面这段话发给当前 Coding Agent，让它按自己的 Skills 目录和生命周期能力完成适配：
+
+```text
+请安装 https://github.com/food211/harness-assistant 中的五行助手。先读取 docs/code-agent-adapter-contract.md，识别你实际使用的 Skills 目录和生命周期机制，再安装 wuxing-harness 与 use-agent-achievements。不要假定自己是 Codex，也不要修改通用协议来迁就宿主。没有 Hook 时使用 Skill 的通用 presence 命令。安装后验证两份 Skill 都能发现、成就系统可以初始化、五行 Harness 的 achievement_sync.status 为 ready，并把你做的宿主适配和验证结果告诉我。
+```
+
+Agent 可以调用仓库提供的底层安装器。默认目标是 `~/.agents/skills`：
 
 ```powershell
-Copy-Item -Recurse skills\wuxing-harness "$env:CODEX_HOME\skills\wuxing-harness"
-Copy-Item -Recurse skills\use-agent-achievements "$env:CODEX_HOME\skills\use-agent-achievements"
+npm run install:skills
 ```
+
+如果 Code Agent 使用自己的 Skills 目录，直接传入该目录：
+
+```powershell
+npm run install:skills -- --target <agent-skills-directory>
+```
+
+也可以只为一个工作区安装到标准的项目目录：
+
+```powershell
+npm run install:skills -- --project <workspace-directory>
+```
+
+安装器可以同时接收多个 `--target`。它不会静默覆盖已经被修改的 Skill；确认替换时显式加 `--force`。
+
+完整的宿主适配边界见 [Code Agent 自适配安装契约](./docs/code-agent-adapter-contract.md)。我们提供稳定接口，不在仓库里硬编码每一种 Code Agent 的目录、Hook 和权限配置。
 
 安装后，可以对 Agent 说：
 
@@ -117,13 +139,15 @@ Copy-Item -Recurse skills\use-agent-achievements "$env:CODEX_HOME\skills\use-age
 
 Harness 把待判断项保存在工作区的 `.wuxing-harness/state.json`。它只记录规则、证据和人的判断，不会在获得批准前修改规则文件。
 
-如果需要让 Codex 自动同步活跃状态，可以安装生命周期 Hook：
+没有专属 Hook 时，Agent 按 Skill 调用通用 `presence` 命令，其他功能不受影响。宿主提供可信生命周期 Hook 时，可以增加一个只负责自动同步在线状态的适配器。
+
+Codex 的可选适配器：
 
 ```powershell
 node skills/use-agent-achievements/scripts/install-codex-hooks.mjs
 ```
 
-安装后需要在 Codex `/hooks` 中审核并信任该 Hook。它只写入标准化的在线状态，不读取对话正文，也不把心跳当作成就证据。
+安装后需要在 Codex `/hooks` 中审核并信任该 Hook。不要在其他 Code Agent 中运行这个适配器。它只写入标准化的在线状态，不读取对话正文，也不把心跳当作成就证据。
 
 ## Agent 接口
 
@@ -149,6 +173,7 @@ agent-achievements/
 ├── packages/protocol/                 # 成就 JSON Schema
 ├── skills/wuxing-harness/             # 可安装的规则审查 Skill
 ├── skills/use-agent-achievements/     # 可安装的成就 Skill
+├── scripts/install-agent-skills.mjs   # Code Agent 中立的安装器
 ├── examples/wuxing-harness/           # 第三方接入示例
 └── tests/                              # 协议与闭环测试
 ```

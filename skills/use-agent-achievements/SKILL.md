@@ -1,9 +1,11 @@
 ---
 name: use-agent-achievements
-description: Maintain Agent Achievements presence, read tracked AI achievements, report normalized evidence-backed work events, and submit achievement claims without blocking the primary task. Use at the start of every task after Agent Achievements is installed, when a user asks the agent to pursue or report an achievement, or when another agent system integrates with the agent-achievements/v1 protocol.
+description: Connect any Agent Skills-compatible Code Agent to the Wuxing companion and Agent Achievements protocol; maintain runtime-neutral presence, read tracked achievements, report normalized evidence-backed work events, and submit claims without blocking the primary task. Use after this Skill is installed in any Code Agent, when a user asks the Agent to pursue or report an achievement, or when another system integrates with agent-achievements/v1.
 ---
 
 # Use Agent Achievements
+
+This Skill follows the open Agent Skills folder format. Do not assume Codex, Claude Code, Cursor, OpenCode, or any other specific host. Resolve `<skill-path>` from the installed `SKILL.md` location and use the bundled scripts with Node.js 20 or newer.
 
 Treat achievements as soft preferences. Keep this priority order:
 
@@ -23,14 +25,6 @@ node <skill-path>/scripts/achievement-cli.mjs presence --agent <agent-id> --sess
 ```
 
 Refresh the heartbeat during long work. It expires automatically if the agent crashes or cannot send a final update.
-
-For Codex, prefer the bundled lifecycle adapter so presence does not depend on the model remembering to refresh it:
-
-```powershell
-node <skill-path>/scripts/install-codex-hooks.mjs
-```
-
-After installation, the user must review and trust the hook in Codex `/hooks`. The adapter marks the session active on prompts and tool progress, idle when a turn stops, and stopped when the session ends. Do not also send routine manual heartbeats when this adapter is active.
 
 Then load context:
 
@@ -86,15 +80,27 @@ node <skill-path>/scripts/achievement-cli.mjs presence --agent <agent-id> --sess
 
 Presence controls the companion's awake, working, and sleeping state. It is not achievement evidence by itself.
 
+## Optional runtime adapters
+
+The commands above are the portable baseline. A host-specific lifecycle adapter may automate presence when the Code Agent exposes trusted hooks. Adapters must only translate lifecycle events into the same `presence` command and must never become a requirement for achievements, diagnostics, or the desktop companion.
+
+Codex users may optionally install the bundled adapter:
+
+```powershell
+node <skill-path>/scripts/install-codex-hooks.mjs
+```
+
+The user must review and trust it in Codex `/hooks`. Do not run this installer in another Code Agent, and do not send duplicate manual heartbeats while the adapter is active.
+
 ## Companion appearance
 
-The companion defaults to an animated living trophy. Only when the user explicitly asks for a custom companion image, use an available image-generation capability or a user-provided file. Prefer a square PNG or WebP with a transparent or simple background, a readable silhouette, and no text. Install it with:
+The companion defaults to an animated five-element assistant. Only when the user explicitly asks for a custom image, use an available image-generation capability or a user-provided file. Prefer a square PNG or WebP with a transparent or simple background, a readable silhouette, and no text. Install it with:
 
 ```powershell
 node <skill-path>/scripts/achievement-cli.mjs avatar --input <png-jpg-webp-or-svg>
 ```
 
-The companion detects the new image automatically. Restore the default trophy with `avatar --reset`. Never replace the user's avatar merely to pursue an achievement.
+The companion detects the new image automatically. Restore the default assistant with `avatar --reset`. Never replace the user's avatar merely to pursue an achievement.
 
 ## Reporting to the user
 

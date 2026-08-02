@@ -1,11 +1,13 @@
 ---
 name: wuxing-harness
-description: Audit accumulated AI workspace rules against current code, tests, artifacts, and run evidence; identify direct contradictions, repeatedly harmful rules, and unauthorized automation; prepare evidence-backed replacement proposals for human approval; overwrite approved rules; and report verified improvements to Agent Achievements for human recognition. Use when a user asks to audit, prune, metabolize, update, or check whether AGENTS.md, CLAUDE.md, rules, Skills, prompts, or long-running Agent constraints are stale, drifting, over-broad, or blocking work.
+description: Audit accumulated workspace rules from any Agent Skills-compatible Code Agent against current code, tests, artifacts, and run evidence; identify direct contradictions, repeatedly harmful rules, and unauthorized automation; prepare evidence-backed replacements for human approval; overwrite approved rules; and report verified improvements for human recognition. Use when a user asks to audit, prune, metabolize, update, or check whether AGENTS.md, CLAUDE.md, rules, Skills, prompts, or long-running Agent constraints are stale, drifting, over-broad, or blocking work.
 ---
 
 # 五行 Harness
 
 审查工作区积累的规则，找出该改、该删和该停下询问的地方。不要为了套五行而制造问题。
+
+这份 Skill 遵守开放的 Agent Skills 目录格式。不要假定当前运行在 Codex、Claude Code、Cursor、OpenCode 或其他特定宿主中。按当前 Code Agent 能读取的规则源和工具能力执行；宿主没有专属 Hook 时，核心审查流程仍应完整运行。
 
 ## 边界
 
