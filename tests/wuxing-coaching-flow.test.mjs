@@ -38,6 +38,8 @@ test("coaching asks one saved question at a time and does not advance vague answ
   assert.match(started.current_question.prework, /Skill、模板、规则文件和提示词/);
   assert.match(started.current_question.prompt, /这是我扫描到的固定做法/);
   assert.equal(started.prepared_context, null);
+  assert.equal(started.support_context, null);
+  assert.equal(started.inventory_context, null);
   assert.match(started.instruction, /coach-observe/);
 
   assert.match(runFailure(workspace, ["coach-answer", "--input", await answerFile(workspace, {
@@ -55,7 +57,8 @@ test("coaching asks one saved question at a time and does not advance vague answ
     ]
   })]);
   assert.equal(observed.coaching.prepared_context.candidates.length, 2);
-  assert.match(observed.coaching.instruction, /Keep the scanned inventory/);
+  assert.equal(observed.coaching.inventory_context.candidates.length, 2);
+  assert.match(observed.coaching.instruction, /Agent's completed analysis/);
 
   const vague = run(workspace, ["coach-answer", "--input", await answerFile(workspace, {
     step_id: "creator_inventory",
@@ -72,8 +75,20 @@ test("coaching asks one saved question at a time and does not advance vague answ
   })]);
   assert.equal(concrete.current_question.step_id, "creator_outdated");
   assert.equal(concrete.step_index, 1);
-  assert.match(concrete.current_question.prompt, /已经过时了但你还在用/);
-  assert.match(concrete.instruction, /Do not prepare a candidate answer first/);
+  assert.equal(concrete.prepared_context, null);
+  assert.equal(concrete.support_context, null);
+  assert.equal(concrete.inventory_context.candidates[0].id, "skill-git-recap");
+  assert.match(concrete.current_question.prompt, /最值得处理的陈旧候选/);
+  assert.match(concrete.instruction, /Never present a naked question/);
+
+  const assisted = run(workspace, ["coach-observe", "--input", await answerFile(workspace, {
+    step_id: "creator_outdated",
+    summary: "用户要求按最后修改时间缩小到五项。",
+    candidates: [{ id: "rule-data", label: "数据完整性规则", source_ref: "AGENTS.md", evidence: "最后一次可见修改时间用于导航，不代表规则已经过时。", confidence: "unknown" }]
+  })]);
+  assert.equal(assisted.coaching.current_question.step_id, "creator_outdated");
+  assert.equal(assisted.coaching.prepared_context.candidates[0].id, "rule-data");
+  assert.equal(assisted.coaching.answer_count, 2, "question-method changes must not be recorded as answers");
 
   const directInterviewAnswer = run(workspace, ["coach-answer", "--input", await answerFile(workspace, {
     step_id: "creator_outdated",
@@ -84,12 +99,13 @@ test("coaching asks one saved question at a time and does not advance vague answ
 
   const resumed = run(workspace, ["coach-status"]);
   assert.equal(resumed.current_question.step_id, "creator_obsolete_guard");
+  assert.equal(resumed.inventory_context.candidates.length, 2);
   const state = JSON.parse(await readFile(path.join(workspace, ".wuxing-harness", "state.json"), "utf8"));
   assert.equal(state.coaching.answer_count, 3);
   assert.equal(state.coaching.answers, undefined);
   const database = new DatabaseSync(path.join(workspace, ".wuxing-harness", "harness.db"), { readOnly: true });
   assert.deepEqual(database.prepare("SELECT quality FROM coaching_answers ORDER BY created_at, rowid").all().map((item) => item.quality), ["needs_followup", "concrete", "concrete"]);
-  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM coaching_observations").get().count, 1);
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM coaching_observations").get().count, 2);
   database.close();
 });
 
@@ -146,13 +162,11 @@ test("coaching keeps creator, technical, and boundary phases in order", async ()
 
   while (current.current_question) {
     seen.push([current.phase, current.current_question.step_id]);
-    if (current.current_question.step_id === "creator_inventory") {
-      run(workspace, ["coach-observe", "--input", await answerFile(workspace, {
-        step_id: current.current_question.step_id,
-        summary: `完成预调查：${current.current_question.step_id}`,
-        candidates: [{ id: `candidate-${current.step_index}`, label: "候选", source_ref: "fixture", evidence: "测试证据", confidence: "high" }]
-      })]);
-    }
+    run(workspace, ["coach-observe", "--input", await answerFile(workspace, {
+      step_id: current.current_question.step_id,
+      summary: `完成预调查：${current.current_question.step_id}`,
+      candidates: [{ id: `candidate-${current.step_index}`, label: "候选", source_ref: "fixture", evidence: "测试证据", confidence: "high" }]
+    })]);
     current = run(workspace, ["coach-answer", "--input", await answerFile(workspace, {
       step_id: current.current_question.step_id,
       answer: `真实实例：${current.current_question.step_id}`,

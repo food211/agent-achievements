@@ -109,7 +109,7 @@ npm run wuxing
 只需要把下面这段话发给当前 Coding Agent。后续初始化、首次诊断、成果回顾、默认挑战和连接验证都由它完成，不再让用户手动创建、追踪或申领成就：
 
 ```text
-请安装 https://github.com/food211/harness-assistant 中的 wuxing-harness Skill。识别你的 Skills 目录和当前工作区，只安装 skills/wuxing-harness，然后运行 harness-cli.mjs init 与 coach-start。先扫描当前仓库实际生效的 Skill、模板、规则和提示词，再按“开发创作者 → 技术判据 → 边界”一次只问一个问题。不要安装或启动桌面助手，也不要要求我配置长连接。
+请安装 https://github.com/food211/harness-assistant 中的 wuxing-harness Skill。识别你的 Skills 目录和当前工作区，只安装 skills/wuxing-harness，然后运行 harness-cli.mjs init。立即扫描当前仓库的规则、Skill、代码、测试和运行记录，优先寻找规则语义漂移、正确规则用错场景、AI 自行补齐规则空白三类发现。把达到证据门槛的候选连同规则原文、触发与冲突次数、证据和替换建议列给我，我只逐条批准、拒绝、继续观察或要求展开。不要创建待办，不要让我回答 Harness 设计问卷，也不要安装或启动桌面助手和长连接。
 ```
 
 Agent 可以调用仓库提供的底层安装器。默认目标是 `~/.agents/skills`：
@@ -134,7 +134,7 @@ npm run install:skills -- --project <workspace-directory>
 
 完整的宿主适配边界见 [Code Agent 自适配安装契约](./docs/code-agent-adapter-contract.md)。我们提供稳定接口，不在仓库里硬编码每一种 Code Agent 的目录、Hook 和权限配置。
 
-安装器会初始化当前工作区的 `.wuxing-harness/state.json` 和 `harness.db`，然后交给安装 Agent 开始规则健康诊断。Harness 只记录规则、证据和人的判断，不会在获得批准前修改需要人决策的规则文件。
+安装器会初始化当前工作区的 `.wuxing-harness/state.json` 和 `harness.db`。返回的 `immediate_handoff` 要由安装 Agent 在同一轮继续：直接扫描规则、代码、测试和运行记录，寻找规则语义漂移、正确规则用错场景、AI 自行补齐规则空白三类候选，再带证据请用户逐条批准；不创建“稍后领取”的诊断待办，也不抛出 Harness 设计问卷。Harness 不会在获得批准前修改需要人决策的规则文件。
 
 成就系统和桌面助手保留为可选扩展，不属于下午演示的安装路径。需要成就协议时可显式增加 `--with-achievements`；桌面助手继续仅用于本机展示。
 

@@ -48,8 +48,8 @@ test("installs the standalone Wuxing Skill into any explicit Code Agent director
     assert.equal(output.achievements_included, false);
     assert.equal(output.runtime_adapters_optional, true);
     assert.equal(output.bootstrap_automatic, true);
-    assert.equal(output.activation_complete, false);
-    assert.equal(output.pending_agent_action_count, 1);
+    assert.equal(output.activation_complete, true);
+    assert.equal(output.pending_agent_action_count, 0);
     assert.deepEqual(output.next_steps_for_user, []);
     assert.match(output.adapter_contract, /code-agent-adapter-contract\.md$/);
     assert.deepEqual(output.installations.map((item) => item.skill), ["wuxing-harness"]);
@@ -61,12 +61,13 @@ test("installs the standalone Wuxing Skill into any explicit Code Agent director
     assert.equal(output.activations.length, 1);
     assert.deepEqual(output.activations[0].identity, { agent_id: "portable-agent", runtime_id: "generic-code-agent" });
     assert.deepEqual(output.activations[0].capabilities, ["agent-skills", "task-boundary"]);
-    assert.ok(output.activations[0].agent_next_actions.some((item) => item.action === "run_wuxing_diagnostic"));
-    assert.deepEqual(
-      new Set(output.activations[0].agent_next_actions.map((item) => item.action)),
-      new Set(["run_wuxing_diagnostic"])
-    );
+    assert.deepEqual(output.activations[0].agent_next_actions, []);
     assert.equal(output.activations[0].achievement_bootstrap, null);
+    assert.equal(output.activations[0].wuxing_coaching, null);
+    assert.equal(output.activations[0].immediate_handoff.kind, "wuxing_rule_audit");
+    assert.equal(output.activations[0].immediate_handoff.required_in_current_turn, true);
+    assert.match(output.activations[0].immediate_handoff.instruction, /语义漂移/);
+    assert.match(output.activations[0].immediate_handoff.instruction, /不要创建待办/);
     assert.equal(output.activations[0].wuxing_harness.ok, true);
     const harnessStatePath = path.join(workspace, ".wuxing-harness", "state.json");
     const harnessStateBeforeRepeat = await readFile(harnessStatePath, "utf8");

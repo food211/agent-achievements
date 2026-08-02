@@ -23,19 +23,19 @@ const skillRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 
 const COACHING_STEPS = [
   { id: "creator_inventory", phase: "creator", requires_observation: true, prework: "扫描所有实际生效的 Skill、模板、规则文件和提示词；按类型列出名称、路径和一句可核验用途，合并重复项。", prompt: "这是我扫描到的固定做法。哪些已经停用、描述不准或遗漏？如果准确，回复“清单准确”即可。" },
-  { id: "creator_outdated", phase: "creator", prework: "回看已确认的规则清单；不要先替用户判断哪条过时。", prompt: "这些沉淀里，有没有哪一条已经过时了但你还在用？你是怎么发现它过时的？发现之后做了什么？请讲一个具体实例。" },
-  { id: "creator_obsolete_guard", phase: "creator", prework: "回看上一问的实例；不要从规则年龄推断它已经失效。", prompt: "有没有哪一条规则，当初是为了防一个具体问题加进去的，而那个问题现在已经不存在了，但规则还在？请说具体规则和当时要防的问题。" },
-  { id: "creator_human_judgment", phase: "creator", prework: "回看前面的具体实例；这一问仍只讨论创作者经验，不进入实现。", prompt: "你跟 AI 协作时，什么具体情况下会想“这个还是得我来定”？请讲一次真实发生的事。" },
-  { id: "admission_human", phase: "technical", prework: "只使用第一段已经确认的实例来帮助追问，不要先替用户给出判据。", prompt: "现在切换到技术。系统遇到不确定时，什么情况必须挂起来留给人？关键判据是置信度、影响范围、可逆性，还是别的？先把这一条说具体。" },
-  { id: "admission_agent", phase: "technical", prework: "沿用用户刚给出的入队判据。", prompt: "反过来，什么问题不该进入待判队列，而应该由 Agent 自己决定？请给一个明确边界和一个例子。" },
-  { id: "admission_failure", phase: "technical", prework: "用前两问形成的边界思考误报，不要跳到系统架构。", prompt: "如果这道筛不准，哪类垃圾问题最容易塞满队列，让人清一次就不想再来？你希望系统怎样保守处理？" },
-  { id: "resume_work", phase: "technical", prework: "确认入队判据已经足够具体后，再讨论非阻塞续跑。", prompt: "一条任务挂起后，其他分支怎么继续？状态存在哪里，人判断完以后怎样接回去？等待期间系统还能跑出什么？" },
-  { id: "judgment_to_rule", phase: "technical", prework: "回看已经记录的人的判断和重复问题。", prompt: "人的一次判断怎样变成规则？一条规则最小长什么样，怎样让后续同类问题不再问，同时避免只遇到一次就盲目建规则？" },
-  { id: "overturn_rule", phase: "technical", prework: "只讨论当前 MVP 能观察到的信号。", prompt: "系统怎样知道一条规则过期了？今天能做出哪一种信号？推翻后旧规则是删除、归档还是降权，为什么？" },
-  { id: "metrics", phase: "technical", prework: "回看已确定的运行与挂起方式。", prompt: "三个证据数字怎样记录和展示：人介入次数 / 系统执行次数、一次判断解掉几个待判点、等待人判断期间系统跑了多少？" },
-  { id: "boundary_non_goals", phase: "boundary", prework: "进入第三段前，停止扩展实现方案。", prompt: "今天明确不做什么？请尽量具体，尤其列出看起来有用但会把 MVP 做大的部分。" },
-  { id: "boundary_unfit", phase: "boundary", prework: "逐项检查五行映射；卡住就保留卡住，不替框架解释。", prompt: "哪些五行映射在技术上实现不了、不值得实现，或者你觉得根本套不上？" },
-  { id: "boundary_dependencies", phase: "boundary", prework: "只问真正影响开始动手的外部依赖。", prompt: "你还需要队友或外部系统提供什么，才能开始动手？没有就直接说没有。" }
+  { id: "creator_outdated", phase: "creator", requires_observation: true, prework: "把已确认清单与当前代码、测试、Git 历史、问题记录和人工纠正对照；找出有直接矛盾或反复摩擦证据的陈旧候选。每项说明当前用途、失效信号和证据；文件年龄只能用于排序。", prompt: "这是本轮最值得处理的陈旧候选。请选择一条先处理、纠正我的判断，或确认本轮没有合适候选。" },
+  { id: "creator_obsolete_guard", phase: "creator", requires_observation: true, prework: "追查所选规则的建立目的、当时防范的问题和今天是否仍存在。能从代码与历史确认的直接给结论；找不到目的时明确写未知。", prompt: "我已经把规则原目的和当前现实对齐。请只确认 Agent 无法知道的原始意图，或选择保留、修改、退役、继续观察。" },
+  { id: "creator_human_judgment", phase: "creator", requires_observation: true, prework: "读取具体任务、人工纠正和判断数据库，归纳哪些取舍已有明确规则、哪些仍属于产品或审美判断；给出 Agent 建议边界和实例。", prompt: "这是我归纳的人类判断边界。请批准、收紧或放宽；不需要重新讲一遍仓库事实。" },
+  { id: "admission_human", phase: "technical", requires_observation: true, prework: "根据已确认实例拟定一条最小入队判据，覆盖影响范围、可逆性、既有规则和批量数据影响，并列出它会拦住的真实实例。", prompt: "这是建议的入队判据。请批准，或指出哪种情况应该增删。" },
+  { id: "admission_agent", phase: "technical", requires_observation: true, prework: "从低影响、可逆、有明确规则且可自行验证的任务中整理不应入队的反例。", prompt: "这些情况建议由 Agent 自己决定。请确认是否存在必须询问的例外。" },
+  { id: "admission_failure", phase: "technical", requires_observation: true, prework: "用当前判据回放已有问题，指出最可能的误报、漏报和垃圾队列来源，并提出一个保守修正。", prompt: "这是判据回放和保守修正。请确认这个误报/漏报取舍是否可接受。" },
+  { id: "resume_work", phase: "technical", requires_observation: true, prework: "检查宿主真实的任务、子任务和持久化能力，给出挂起一项后可继续的独立分支、恢复状态和明确限制。", prompt: "这是当前宿主真正能做到的续跑方式。请只纠正其中的错误假设。" },
+  { id: "judgment_to_rule", phase: "technical", requires_observation: true, prework: "聚合同一 fingerprint 的问题与人的决定，提出最小规则文本；标注出现次数、共通点和不应升级的孤例。", prompt: "这是可以沉淀的规则候选。请选择继续观察、创建或替换。" },
+  { id: "overturn_rule", phase: "technical", requires_observation: true, prework: "从现有测试、运行结果和版本控制中选择可实施的失效信号，给出旧规则的删除、归档或降权建议及影响。", prompt: "这是建议的推翻信号和旧规则处置方式。请批准或改选。" },
+  { id: "metrics", phase: "technical", requires_observation: true, prework: "依据 harness.db 和宿主记录直接计算或给出可计算口径：人介入/系统执行、一次判断解题数、等待期间执行数；附一个真实样例。", prompt: "这是三个证据数字及口径。请只指出哪项不能代表你要证明的事情。" },
+  { id: "boundary_non_goals", phase: "boundary", requires_observation: true, prework: "从本轮目标、仓库现状和已确认方案提取不做清单，主动剔除会扩大 MVP 的部分。", prompt: "这是建议的不做清单。请删除误判或补一个关键遗漏。" },
+  { id: "boundary_unfit", phase: "boundary", requires_observation: true, prework: "检查每个五行映射是否有真实机制；把套不上、技术不可行或收益不足的项原样列为 unmapped。", prompt: "这些映射目前不成立或不值得做。请确认，不需要替框架找解释。" },
+  { id: "boundary_dependencies", phase: "boundary", requires_observation: true, prework: "扫描接口、凭据、外部服务、队友交付和运行环境，区分真正阻塞与 Agent 可自行完成。", prompt: "这是仅剩的真实依赖。请确认归属；没有阻塞就直接进入实施。" }
 ];
 
 function emptyState() {
@@ -222,7 +222,10 @@ function currentCoachingStep(coaching) {
 
 function coachingOutput(coaching) {
   const step = currentCoachingStep(coaching);
-  const preparedContext = step?.requires_observation ? latestCoachingObservation(coaching, step) : null;
+  const currentObservation = latestCoachingObservation(coaching, step);
+  const preparedContext = step?.requires_observation ? currentObservation : null;
+  const supportContext = step && !step.requires_observation ? currentObservation : null;
+  const inventoryContext = latestCoachingObservation(coaching, COACHING_STEPS[0]);
   return {
     schema_version: VERSION,
     status: coaching.status,
@@ -232,12 +235,14 @@ function coachingOutput(coaching) {
     total_steps: COACHING_STEPS.length,
     current_question: step ? { step_id: step.id, prework: step.prework, prompt: step.prompt } : null,
     prepared_context: preparedContext,
+    support_context: supportContext,
+    inventory_context: inventoryContext,
     instruction: step
       ? step.requires_observation
         ? preparedContext
-          ? "Present prepared_context, then ask only current_question.prompt. Keep the scanned inventory; do not ask the user to reconstruct it from memory."
-          : "Complete current_question.prework and save it with coach-observe before asking the first question."
-        : "Ask only current_question.prompt. Do not prepare a candidate answer first. If the answer is vague, stay on this step and ask for one concrete event, rule, action, and result; do not advance phases."
+          ? "Present prepared_context as the Agent's completed analysis, then ask only the minimal decision in current_question.prompt. Do not ask the user to supply facts already available in the workspace. Follow any user-requested change to sorting, filtering, or presentation while keeping the same decision goal."
+          : "Complete current_question.prework and save the evidence-backed analysis with coach-observe before asking the user anything. Never present a naked question."
+        : "Treat current_question.prompt as the judgment goal, not fixed wording. If the user asks to list, sort, filter, compare, or inspect, immediately change the questioning method from recall to recognition, follow the user's requested lens, save the resulting shortlist with coach-observe, and keep the same step. Use support_context to resume that adapted method. Do not call coach-answer until the user actually makes or describes a judgment."
       : "Synthesize the runnable minimum loop, the concrete human-admission rule, and the explicit non-goal list from the recorded answers and code evidence.",
     deliverables: step ? [] : ["runnable_minimum_loop", "human_admission_rule", "non_goals"]
   };

@@ -9,19 +9,22 @@ description: Proactively audit accumulated workspace rules by scanning active Sk
 
 这份 Skill 遵守开放的 Agent Skills 目录格式。不要假定当前运行在 Codex、Claude Code、Cursor、OpenCode 或其他特定宿主中。按当前 Code Agent 能读取的规则源和工具能力执行；宿主没有专属 Hook 时，核心审查流程仍应完整运行。
 
-## 安装后的自动入口
+## 默认入口：清理积压规则
 
-成就系统 `bootstrap` 返回 `run_wuxing_diagnostic` 时，当前安装 Agent 启动或恢复一次分阶段诊断，不要求用户再说“开始”。完整遵循 [references/coaching-flow.md](references/coaching-flow.md)：
+安装后或用户要求诊断当前仓库时，立即运行一次真实审查。不要创建“稍后领取”的待办，也不要先让用户回答一套关于 Harness 设计的问题。
 
-1. 初始化当前工作区的 Harness 状态。
-2. 调用 `coach-start` 或 `coach-status` 取得当前步骤。第一步 `creator_inventory` 必须先扫描规则源，把名称、路径、用途和证据写入 `coach-observe`，向用户展示 `prepared_context` 后再问；保留 Agent 先扫规则、用户只确认纠错的入口。
-3. 第一问之后切换为教练访谈：每轮只问当前 `prompt`，不再先生成候选答案。回答含糊时以 `needs_followup` 保存，停留在当前步骤追一个具体实例；未完成当前段，不得提前跳到实现或下一段。
-4. 严格依次完成“开发创作者 → 技术判据 → 边界”三段。技术段先把“什么该留给人”问透，再谈续跑、规则沉淀、规则推翻和指标；最后结合代码证据形成待判断项或继续观察项。
-5. 涉及产品判断、高影响数据或自动化边界的内容只挂起这一项；其他独立任务继续运行。
+1. 初始化当前工作区状态，扫描实际生效的规则、Skills、模板和提示词。
+2. 优先寻找三类真实发现：
+   - **规则语义漂移**：规则经过多次压缩或改写后已经与代码、测试、运行结果相反或无法描述当前系统；
+   - **正确规则用错场景**：规则内容本身成立，但触发条件、执行者或有人值守/无人托管等适用范围不准确；
+   - **AI 自行补齐规则空白**：没有明确产品规则时，Agent 按“自动化越多越好”“历史数据越齐越好”等偏好做了高影响决定。
+3. 只把达到证据门槛的项目写成 finding。每条必须带规则原文、建立目的、触发次数、结果冲突、代码/测试/运行或人工决定证据，以及可直接覆盖的建议文本。
+4. 向用户展示最多 5 条积压候选，先给最强证据和建议处置。人只需逐条选择：批准修改、拒绝、继续观察、展开证据。
+5. 获得批准后修改并验证，再展示改前/改后和结果。完成一条闭环后继续下一条，不要求用户设计审查系统。
 
-首次五行诊断检查“当前规则是否健康”。它和成就系统的首次成果回顾是两个动作：不要用旧成就替代规则诊断，也不要把尚未修复的规则问题算作成果。
+用户说“列出来”“按时间排”“展开看看”时，按她指定的方式重组候选并保持当前决策目标。Git 时间只能缩小范围，不能证明规则失效。
 
-宿主没有后台唤醒或任务 Hook 时，在下一次 Agent 运行时自动续做未完成诊断。不要声称能在 Agent 停止后自行运行。
+只有证据不足、需要补齐人的原始意图时，才使用 [references/coaching-flow.md](references/coaching-flow.md) 的分步引导。Agent 每步仍须先交付分析结果，再请求一个最小判断；不得抛出开放问卷。
 
 ## 边界
 
@@ -41,7 +44,7 @@ description: Proactively audit accumulated workspace rules by scanning active Sk
    - 规则仍然自洽但反复造成阻碍或坏结果：至少两次独立实例，或一次实例加一项明确的人类决策。
    - 新增后台定时任务、无人触发的自动行为，或实质改变外部数据同步：先停下实施，说明影响后交给人。
 5. 为每项发现写全规则原文、建立目的、预期结果、实际结果、证据、替换文本、修改理由、影响范围和可逆性。格式见 [references/audit-format.md](references/audit-format.md)，载荷遵守 [finding.schema.json](references/finding.schema.json)。
-6. 把待判断项交给人。允许批量展示，但逐条记录批准或拒绝。
+6. 把待判断项交给人。默认按“语义漂移 → 场景错误 → 自动化空白”组织，允许批量展示，但逐条记录批准或拒绝。
 7. 获得批准后，重新读取目标文件完整内容，确认原文仍存在，然后直接覆盖旧规则。不要让新旧两版同时留在上下文里。历史交给版本控制。
 8. 运行与影响范围相称的验证，记录改前、改后和验证结果。拒绝的发现保留判断记录，不改规则。
 
@@ -86,7 +89,7 @@ node <skill-path>/scripts/harness-cli.mjs decide --finding <id> --decision appro
 node <skill-path>/scripts/harness-cli.mjs applied --finding <id> --input <application.json>
 ```
 
-`observation.json` 遵守 [references/coaching-observation.schema.json](references/coaching-observation.schema.json)，用于保存第一问扫描到的规则清单和证据。`answer.json` 包含当前 `step_id`、用户原话 `answer`，以及 `quality: concrete|needs_followup`；用户确认第一问的清单属于 `concrete`，后续问题则必须落到具体规则、事件、动作或结果。访谈指针保存在 `.wuxing-harness/state.json`；规则清单、逐步回答、Agent 遇到的问题和用户决策保存在 `.wuxing-harness/harness.db`。问题与决策的字段和记录时机见 [references/coaching-flow.md](references/coaching-flow.md)。脚本不自行修改规则文件。成就申请始终晚于人的批准和实际验证，不能反过来驱动审查结论。
+`observation.json` 遵守 [references/coaching-observation.schema.json](references/coaching-observation.schema.json)，用于保存每一步由 Agent 完成的扫描、候选和证据。每个规则候选必须是可单独修改或退役的真实 Skill、规则文件或明确规则，不能是从长文档概括出的抽象主题。`answer.json` 包含当前 `step_id`、用户原话 `answer`，以及 `quality: concrete|needs_followup`；用户确认清单、纠正事实、补充原始意图或选择处置都属于 `concrete`。访谈指针保存在 `.wuxing-harness/state.json`；规则清单、逐步分析、人的回答、Agent 遇到的问题和用户决策保存在 `.wuxing-harness/harness.db`。问题与决策的字段和记录时机见 [references/coaching-flow.md](references/coaching-flow.md)。脚本不自行修改规则文件。成就申请始终晚于人的批准和实际验证，不能反过来驱动审查结论。
 
 ## 给人的输出
 

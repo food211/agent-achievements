@@ -149,13 +149,7 @@ async function activate(targetRoot, workspace, identity, capabilities, environme
   }
 
   let achievementBootstrap = null;
-  let agentNextActions = [{
-    action_id: `run-wuxing-diagnostic:${workspace}`,
-    action: "run_wuxing_diagnostic",
-    status: "pending",
-    workspace,
-    instructions: "加载 wuxing-harness Skill，先扫描当前仓库规则，再按三段式教练访谈逐步诊断。"
-  }];
+  let agentNextActions = [];
   if (withAchievements) {
     const achievementCli = path.join(targetRoot, "use-agent-achievements", "scripts", "achievement-cli.mjs");
     const bootstrapArgs = [
@@ -186,6 +180,12 @@ async function activate(targetRoot, workspace, identity, capabilities, environme
     capabilities,
     achievement_bootstrap: achievementBootstrap ? (achievementBootstrap.data || achievementBootstrap) : null,
     wuxing_harness: harnessInitialization,
+    wuxing_coaching: null,
+    immediate_handoff: withAchievements ? null : {
+      kind: "wuxing_rule_audit",
+      required_in_current_turn: true,
+      instruction: "立即加载 wuxing-harness，扫描规则、代码、测试和运行记录，找出语义漂移、适用场景错误和 AI 自行补齐规则空白三类候选；带证据向用户逐条请求批准。不要创建待办，不要抛出设计问卷。"
+    },
     agent_next_actions: agentNextActions,
     user_next_actions: []
   };
