@@ -9,6 +9,7 @@
     "schema_version": { "const": "agent-achievements/v1" },
     "request_id": { "type": "string", "pattern": "^diagnostic-[a-z0-9-]{4,80}$" },
     "agent_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "workspace": { "type": "string", "minLength": 1, "maxLength": 1000 },
     "reason": { "enum": ["first_run", "skills_changed", "manual"] },
     "scope": { "enum": ["past_achievements", "wuxing_rules"] },
     "status": { "enum": ["pending", "reported", "settled"] },

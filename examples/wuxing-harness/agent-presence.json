@@ -5,6 +5,7 @@
   "runtime": {
     "id": "codex"
   },
+  "workspace": "F:/github/voice-md",
   "status": "active",
   "observed_at": "2026-08-01T02:13:30+08:00",
   "expires_at": "2026-08-01T02:15:30+08:00",

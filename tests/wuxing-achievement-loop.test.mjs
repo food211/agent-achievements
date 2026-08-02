@@ -55,7 +55,7 @@ test("a verified Wuxing rule revision becomes a human-awarded achievement and re
   assert.equal(loopProgress.current, 1);
   assert.deepEqual(loopProgress.counted_keys, [`run:${fixture.finding_id}`]);
 
-  const context = spawnSync(process.execPath, [achievementsCli, "context", "--agent", "codex-test", "--task-id", "next-task", "--task-type", "coding", "--summary", "继续工作", "--risk", "low", "--format", "markdown"], { encoding: "utf8", env: { ...process.env, ...env } });
+  const context = spawnSync(process.execPath, [achievementsCli, "context", "--agent", "codex-test", "--workspace", workspace, "--task-id", "next-task", "--task-type", "coding", "--summary", "继续工作", "--risk", "low", "--format", "markdown"], { encoding: "utf8", env: { ...process.env, ...env } });
   assert.equal(context.status, 0, context.stderr);
   assert.match(context.stdout, /规则园丁/);
   assert.match(context.stdout, /这次修改让规则重新符合真实工作/);

@@ -18,6 +18,7 @@
         "version": { "type": "string", "maxLength": 40 }
       }
     },
+    "workspace": { "type": "string", "minLength": 1, "maxLength": 1000 },
     "status": { "enum": ["active", "idle", "stopped"] },
     "observed_at": { "type": "string", "format": "date-time" },
     "expires_at": { "type": "string", "format": "date-time" },
@@ -33,4 +34,3 @@
     "extensions": { "type": "object" }
   }
 }
-

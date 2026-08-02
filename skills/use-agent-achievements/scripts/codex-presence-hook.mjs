@@ -83,12 +83,14 @@ function updatePresence(input) {
     item.session_id !== sessionId && item.status !== "stopped" && new Date(item.expires_at).getTime() > now.getTime()
   );
   if (status !== "stopped") {
-    const workspace = path.basename(String(input.cwd || "")) || "当前工作区";
+    const workspacePath = path.resolve(String(input.cwd || process.cwd()));
+    const workspace = path.basename(workspacePath) || "当前工作区";
     sessions.push({
       schema_version: VERSION,
       session_id: sessionId,
       agent_id: AGENT_ID,
       runtime: { id: RUNTIME_ID },
+      workspace: workspacePath,
       status,
       observed_at: now.toISOString(),
       expires_at: expiresAt.toISOString(),

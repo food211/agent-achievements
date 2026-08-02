@@ -160,8 +160,6 @@ async function activate(targetRoot, workspace, identity, capabilities, environme
   const agentNextActions = achievementBootstrap.agent_next_actions || achievementBootstrap.data?.agent_next_actions || [];
   if (achievementBootstrap.data?.adapter?.created) {
     for (const requiredAction of [
-      "ensure_companion_running",
-      "ensure_agent_bridge",
       "run_wuxing_diagnostic",
       "diagnose_past_achievements"
     ]) {

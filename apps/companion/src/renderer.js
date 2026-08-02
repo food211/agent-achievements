@@ -31,7 +31,7 @@ const resetAvatar = document.getElementById("resetAvatar");
 const autostart = document.getElementById("autostart");
 const alwaysOnTop = document.getElementById("alwaysOnTop");
 const companionTheme = document.getElementById("companionTheme");
-const openWuxing = document.getElementById("openWuxing");
+const diagnoseRepository = document.getElementById("diagnoseRepository");
 const openForge = document.getElementById("openForge");
 const closeForge = document.getElementById("closeForge");
 const forge = document.getElementById("forge");
@@ -152,7 +152,8 @@ function render(payload) {
   const session = payload.sessions.find((item) => item.status === "active") || payload.sessions[0];
   const isActive = session?.status === "active";
   const isIdle = session?.status === "idle";
-  const displayName = session ? `${session.agent_id} · ${session.runtime.id}` : "Agent 休息中";
+  const workspaceName = session?.workspace ? session.workspace.replace(/[\\/]+$/, "").split(/[\\/]/).pop() : "";
+  const displayName = session ? `${session.agent_id} · ${workspaceName || session.runtime.id}` : "Agent 休息中";
   panelAgent.textContent = displayName;
   pet.classList.toggle("online", isActive);
   pet.classList.toggle("idle", isIdle);
@@ -287,7 +288,23 @@ window.agentCompanion.getAutostart().then((enabled) => { autostart.checked = ena
 alwaysOnTop.addEventListener("change", () => window.agentCompanion.setAlwaysOnTop(alwaysOnTop.checked));
 window.agentCompanion.getAlwaysOnTop().then((enabled) => { alwaysOnTop.checked = enabled; });
 window.agentCompanion.onAlwaysOnTop((enabled) => { alwaysOnTop.checked = enabled; });
-openWuxing.addEventListener("click", () => window.agentCompanion.openWuxing());
+diagnoseRepository.addEventListener("click", async () => {
+  trackingMessage.textContent = "正在诊断当前仓库…";
+  try {
+    const result = await window.agentCompanion.requestWuxingDiagnostic();
+    const repository = result.workspace.replace(/[\\/]+$/, "").split(/[\\/]/).pop();
+    trackingMessage.textContent = result.created
+      ? `已交给当前 Agent：${repository}。诊断会按步骤逐个提问。`
+      : `${repository} 已有一轮诊断待继续。`;
+  } catch (error) {
+    const message = String(error?.message || "");
+    trackingMessage.textContent = message.includes("agent-not-connected")
+      ? "没有连接中的 Code Agent，暂时无法确定当前仓库。"
+      : message.includes("workspace-not-detected")
+        ? "当前 Agent 尚未上报仓库路径，请重新打开一次 Agent 会话。"
+        : `启动失败：${message || "请重试"}`;
+  }
+});
 function renderEditorList() {
   const editable = latestCatalog.filter((item) => item.editable);
   editorList.innerHTML = editable.length

@@ -11,6 +11,7 @@ const {
   buildAutopilotView,
   buildHumanAchievement,
   ensureDefaultWuxingChallenges,
+  queueWuxingDiagnosticAction,
   reviewPendingClaim,
   settleDiagnosticReport,
   settleTrustedAutomaticClaims,
@@ -46,12 +47,10 @@ const AVATAR_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "svg"];
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 const TRAY_ICON_PATH = path.join(__dirname, process.platform === "win32" ? "tray-icon.ico" : "tray-icon.png");
 const APP_DISPLAY_NAME = "五行 Harness 助手";
-const WUXING_ASSISTANT_URL = process.env.WUXING_ASSISTANT_URL || "https://wuxing-creation-harness.misakiff14.chatgpt.site";
 
 app.setName(APP_DISPLAY_NAME);
 
 let window;
-let wuxingWindow;
 let tray;
 let agentConnectionServer;
 let expanded = false;
@@ -151,16 +150,16 @@ function legacyAutopilotBlockedIds() {
     : [];
 }
 
-function effectiveAutopilotBlockedIds(state, agentId) {
-  return [...new Set([...agentBlockedAchievementIds(state, agentId), ...legacyAutopilotBlockedIds()])];
+function effectiveAutopilotBlockedIds(state, agentId, workspace = null) {
+  return [...new Set([...agentBlockedAchievementIds(state, agentId, workspace), ...legacyAutopilotBlockedIds()])];
 }
 
-function migrateLegacyAutopilotBlocks(state, agentId) {
+function migrateLegacyAutopilotBlocks(state, agentId, workspace = null) {
   const legacyIds = legacyAutopilotBlockedIds();
   if (!agentId || !Object.prototype.hasOwnProperty.call(companionSettings, "autopilot_blocked_ids")) return false;
   let changed = false;
   for (const achievementId of legacyIds) {
-    const result = setAgentAchievementBlocked(state, agentId, achievementId, true);
+    const result = setAgentAchievementBlocked(state, agentId, achievementId, true, workspace);
     changed ||= result.changed;
   }
   const { autopilot_blocked_ids: _legacy, ...settings } = companionSettings;
@@ -169,11 +168,29 @@ function migrateLegacyAutopilotBlocks(state, agentId) {
   return changed;
 }
 
-function prepareAutopilotState(state, agentId) {
-  const migrated = migrateLegacyAutopilotBlocks(state, agentId);
+function prepareAutopilotState(state, agentId, workspace = null) {
+  let workspaceMigrated = false;
+  if (agentId && workspace) {
+    for (const collection of [state.progress_records, state.tracking_records, state.tracking_preferences, state.awards]) {
+      for (const record of collection || []) {
+        if (record.agent_id === agentId && !record.workspace) {
+          record.workspace = workspace;
+          workspaceMigrated = true;
+        }
+      }
+    }
+    for (const achievement of state.achievements || []) {
+      const humanCreated = achievement.origin === "human_created" || achievement.extensions?.created_by === "human";
+      if (humanCreated && !achievement.extensions?.workspace) {
+        achievement.extensions = { ...(achievement.extensions || {}), workspace };
+        workspaceMigrated = true;
+      }
+    }
+  }
+  const migrated = migrateLegacyAutopilotBlocks(state, agentId, workspace);
   const defaults = ensureDefaultWuxingChallenges(state);
-  const tracking = alignAutopilotTracking(defaults.state, { agentId });
-  return { state: tracking.state, changed: migrated || defaults.changed || tracking.changed };
+  const tracking = alignAutopilotTracking(defaults.state, { agentId, workspace });
+  return { state: tracking.state, changed: workspaceMigrated || migrated || defaults.changed || tracking.changed };
 }
 
 function completeSatisfiedRuntimeActions(state) {
@@ -308,14 +325,16 @@ function diagnosticDocument() {
   return readJson(DIAGNOSTICS_PATH, { schema_version: "agent-achievements/v1", requests: [] });
 }
 
-function createDiagnosticRequest(reason = "manual") {
+function createDiagnosticRequest(reason = "manual", agentId = null, workspace = null) {
   const document = diagnosticDocument();
-  const existing = (document.requests || []).find((item) => item.status === "pending");
+  const existing = (document.requests || []).find((item) => item.status === "pending" && (!agentId || item.agent_id === agentId) && (!workspace || item.workspace === workspace));
   if (existing) return existing;
   const request = {
     schema_version: "agent-achievements/v1",
     request_id: `diagnostic-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     reason,
+    ...(agentId ? { agent_id: agentId } : {}),
+    ...(workspace ? { workspace } : {}),
     status: "pending",
     created_at: new Date().toISOString(),
     settled_discovery_ids: []
@@ -346,7 +365,8 @@ function settleReportedDiagnostics(confirm = null) {
     if (!request.report || !["reported", "settled"].includes(request.status)) continue;
     const before = new Set(request.settled_discovery_ids || []);
     const result = settleDiagnosticReport(state, request.report, {
-      confirmDiscoveryId: confirm?.requestId === request.request_id ? confirm.discoveryId : undefined
+      confirmDiscoveryId: confirm?.requestId === request.request_id ? confirm.discoveryId : undefined,
+      workspace: request.workspace
     });
     for (const award of result.awarded) before.add(award.discovery_id);
     request.settled_discovery_ids = [...before];
@@ -373,9 +393,13 @@ function installAvatar(source) {
   avatarCache = { key: "", value: null };
 }
 
-function agentProgress(state, achievementId, agentId) {
+function sameWorkspace(record, workspace) {
+  return workspace ? record?.workspace === workspace : !record?.workspace;
+}
+
+function agentProgress(state, achievementId, agentId, workspace = null) {
   const record = agentId
-    ? state.progress_records?.find((item) => item.agent_id === agentId && item.achievement_id === achievementId)
+    ? state.progress_records?.find((item) => item.agent_id === agentId && item.achievement_id === achievementId && sameWorkspace(item, workspace))
     : null;
   const value = agentId
     ? record?.current
@@ -388,17 +412,17 @@ function agentProgress(state, achievementId, agentId) {
   return 0;
 }
 
-function agentTrackedIds(state, agentId) {
+function agentTrackedIds(state, agentId, workspace = null) {
   const trackedIds = !agentId
     ? state.tracked || []
     : Array.isArray(state.tracking_records)
-      ? state.tracking_records.find((item) => item.agent_id === agentId)?.achievement_ids || []
+      ? state.tracking_records.find((item) => item.agent_id === agentId && sameWorkspace(item, workspace))?.achievement_ids || []
       : state.tracked || [];
-  const blockedIds = new Set(effectiveAutopilotBlockedIds(state, agentId));
+  const blockedIds = new Set(effectiveAutopilotBlockedIds(state, agentId, workspace));
   return trackedIds.filter((item) => !blockedIds.has(item));
 }
 
-function connectionContext(agentId) {
+function connectionContext(agentId, workspace = null) {
   const state = readJson(STATE_PATH, emptyState());
   const visibleState = {
     ...state,
@@ -406,7 +430,8 @@ function connectionContext(agentId) {
   };
   return buildAgentConnectionContext(visibleState, eventRecords(), agentId, {
     autostartEnabled: getAutostart(),
-    blockedIds: effectiveAutopilotBlockedIds(state, agentId)
+    workspace,
+    blockedIds: effectiveAutopilotBlockedIds(state, agentId, workspace)
   });
 }
 
@@ -424,6 +449,16 @@ function currentPayload() {
       const focusSessionForPlan = sessionsForPlan.find((item) => item.status === "active") || sessionsForPlan[0] || null;
       const eventsForPlan = eventRecords();
       const focusAgentForPlan = focusSessionForPlan?.agent_id || state.awards?.at(-1)?.agent_id || eventsForPlan.at(-1)?.actor?.agent_id || null;
+      const focusWorkspaceForPlan = focusSessionForPlan?.workspace || null;
+      let claimsWorkspaceMigrated = false;
+      if (focusAgentForPlan && focusWorkspaceForPlan) {
+        for (const claim of claimsDocument) {
+          if (claim.agent_id === focusAgentForPlan && !claim.workspace) {
+            claim.workspace = focusWorkspaceForPlan;
+            claimsWorkspaceMigrated = true;
+          }
+        }
+      }
       const automatic = settleTrustedAutomaticClaims(state, claimsDocument);
       if (automatic.awarded.length) {
         writeJsonAtomic(STATE_PATH, automatic.state);
@@ -432,8 +467,9 @@ function currentPayload() {
         claimsDocument = automatic.claims;
         lastPayload = "";
       }
+      if (claimsWorkspaceMigrated && !automatic.awarded.length) writeTextAtomic(CLAIMS_PATH, `${claimsDocument.map((item) => JSON.stringify(item)).join("\n")}\n`);
       const runtimeActionsChanged = completeSatisfiedRuntimeActions(state);
-      const prepared = prepareAutopilotState(state, focusAgentForPlan);
+      const prepared = prepareAutopilotState(state, focusAgentForPlan, focusWorkspaceForPlan);
       if (prepared.changed || runtimeActionsChanged) {
         writeJsonAtomic(STATE_PATH, prepared.state);
         state = prepared.state;
@@ -446,25 +482,27 @@ function currentPayload() {
   const focusSession = sessions.find((item) => item.status === "active") || sessions[0] || null;
   const events = eventRecords();
   const focusAgentId = focusSession?.agent_id || state.awards?.at(-1)?.agent_id || events.at(-1)?.actor?.agent_id || null;
+  const focusWorkspace = focusSession?.workspace || null;
   const achievements = state.achievements || [];
-  const scopedAwards = (state.awards || []).filter((item) => !focusAgentId || item.agent_id === focusAgentId);
+  const scopedAwards = (state.awards || []).filter((item) => (!focusAgentId || item.agent_id === focusAgentId) && sameWorkspace(item, focusWorkspace));
   const awardedIds = new Set(scopedAwards.map((item) => item.achievement_id));
   const automation = buildAutopilotView(state, events, {
     agentId: focusAgentId,
+    workspace: focusWorkspace,
     autostartEnabled: getAutostart(),
-    blockedIds: effectiveAutopilotBlockedIds(state, focusAgentId)
+    blockedIds: effectiveAutopilotBlockedIds(state, focusAgentId, focusWorkspace)
   });
   automation.connection_status = focusSession?.extensions?.connected
     ? focusSession.status === "active" ? "connected_active" : "connected_idle"
     : focusSession
       ? focusSession.status === "active" ? "heartbeat_active" : "heartbeat_idle"
       : "waiting";
-  const trackedIds = agentTrackedIds(state, focusAgentId);
+  const trackedIds = agentTrackedIds(state, focusAgentId, focusWorkspace);
   const tracked = achievements.filter((item) => trackedIds.includes(item.achievement_id) && !awardedIds.has(item.achievement_id)).slice(0, 3).map((item) => ({
     ...tierMetadata(item),
     id: item.achievement_id,
     title: item.title,
-    current: agentProgress(state, item.achievement_id, focusAgentId),
+    current: agentProgress(state, item.achievement_id, focusAgentId, focusWorkspace),
     target: item.condition?.target || 1,
     encouragement: item.tracking?.encouragement || item.intent
   }));
@@ -475,6 +513,8 @@ function currentPayload() {
   }));
   const catalog = achievements.filter((item) => {
     const autopilotManaged = item.extensions?.autopilot_managed || item.extensions?.created_by === "companion_autopilot";
+    const humanCreated = item.origin === "human_created" || item.extensions?.created_by === "human";
+    if (focusWorkspace && humanCreated && item.extensions?.workspace !== focusWorkspace) return false;
     if (item.origin === "system_discovered" && !autopilotManaged && focusAgentId) return awardedIds.has(item.achievement_id);
     return true;
   }).map((item) => {
@@ -489,7 +529,7 @@ function currentPayload() {
       id: item.achievement_id,
       title: item.title,
       intent: item.intent,
-      current: agentProgress(state, item.achievement_id, focusAgentId),
+      current: agentProgress(state, item.achievement_id, focusAgentId, focusWorkspace),
       target: item.condition?.target || 1,
       event_type: item.condition?.event_types?.[0] || "task.completed",
       encouragement: item.tracking?.encouragement || "",
@@ -504,15 +544,18 @@ function currentPayload() {
     };
   });
   const designDocument = readJson(DESIGN_REQUESTS_PATH, { requests: [] });
-  const designs = (designDocument.requests || []).filter((item) => item.status !== "applied").slice(-5).reverse();
+  const designs = (designDocument.requests || [])
+    .filter((item) => item.status !== "applied" && (!focusAgentId || !item.agent_id || item.agent_id === focusAgentId) && sameWorkspace(item, focusWorkspace))
+    .slice(-5)
+    .reverse();
   const diagnostics = diagnosticDocument();
-  const latestDiagnostic = (diagnostics.requests || []).at(-1) || null;
+  const latestDiagnostic = (diagnostics.requests || []).filter((item) => (!focusAgentId || !item.agent_id || item.agent_id === focusAgentId) && (!focusWorkspace || !item.workspace || item.workspace === focusWorkspace)).at(-1) || null;
   const settledIds = new Set(latestDiagnostic?.settled_discovery_ids || []);
   const pendingDiscoveries = (latestDiagnostic?.report?.discoveries || []).filter((item) => !settledIds.has(item.discovery_id));
-  const claims = claimsDocument.filter((item) => item.status === "pending_human_review" && (!focusAgentId || item.agent_id === focusAgentId)).slice(-5).reverse().map((claim) => {
+  const claims = claimsDocument.filter((item) => item.status === "pending_human_review" && (!focusAgentId || item.agent_id === focusAgentId) && sameWorkspace(item, focusWorkspace)).slice(-5).reverse().map((claim) => {
     const achievement = achievements.find((item) => item.achievement_id === claim.achievement_id);
     const tier = tierMetadata(achievement);
-    const current = agentProgress(state, claim.achievement_id, claim.agent_id);
+    const current = agentProgress(state, claim.achievement_id, claim.agent_id, focusWorkspace);
     const target = achievement?.condition?.target || 1;
     const evidence = (claim.evidence || []).slice(0, 12).map((item) => ({ type: item.type, ref: item.ref, summary: item.summary || "" }));
     const evidenceSufficient = achievement?.evidence_required === false || evidence.length > 0;
@@ -531,7 +574,7 @@ function currentPayload() {
       ...tier
     };
   });
-  return { dataHome: DATA_HOME, sessions, focusAgentId, tracked, awards, claims, catalog, designs, score: automation.score, automation, avatar: readAvatar(), diagnostic: latestDiagnostic ? {
+  return { dataHome: DATA_HOME, sessions, focusAgentId, focusWorkspace, tracked, awards, claims, catalog, designs, score: automation.score, automation, avatar: readAvatar(), diagnostic: latestDiagnostic ? {
     request_id: latestDiagnostic.request_id,
     reason: latestDiagnostic.reason,
     status: latestDiagnostic.status,
@@ -547,7 +590,7 @@ function reviewClaim(claimId, decision, feedback) {
     const claims = claimRecords();
     const state = readJson(STATE_PATH, emptyState());
     reviewed = reviewPendingClaim(state, claims, claimId, decision, feedback);
-    const prepared = prepareAutopilotState(reviewed.state, reviewed.claim.agent_id);
+    const prepared = prepareAutopilotState(reviewed.state, reviewed.claim.agent_id, reviewed.claim.workspace || null);
     writeJsonAtomic(STATE_PATH, prepared.state);
     writeTextAtomic(CLAIMS_PATH, `${reviewed.claims.map((item) => JSON.stringify(item)).join("\n")}\n`);
   } finally {
@@ -674,12 +717,15 @@ function saveAchievement(input) {
   state.progress[achievement.achievement_id] ??= 0;
   const focusSession = activeSessions().find((item) => item.status === "active") || activeSessions()[0] || null;
   const agentId = focusSession?.agent_id || null;
-  const tracking = updateTrackedIds(agentTrackedIds(state, agentId), achievement.achievement_id, Boolean(input?.track));
+  const workspace = focusSession?.workspace || null;
+  achievement.extensions = { ...(achievement.extensions || {}), ...(workspace ? { workspace } : {}) };
+  if (existingIndex >= 0) state.achievements[existingIndex] = achievement;
+  const tracking = updateTrackedIds(agentTrackedIds(state, agentId, workspace), achievement.achievement_id, Boolean(input?.track));
   if (agentId) {
     state.tracking_records ||= [];
-    const record = state.tracking_records.find((item) => item.agent_id === agentId);
+    const record = state.tracking_records.find((item) => item.agent_id === agentId && sameWorkspace(item, workspace));
     if (record) record.achievement_ids = tracking.tracked;
-    else state.tracking_records.push({ agent_id: agentId, achievement_ids: tracking.tracked });
+    else state.tracking_records.push({ agent_id: agentId, ...(workspace ? { workspace } : {}), achievement_ids: tracking.tracked });
   } else {
     state.tracked = tracking.tracked;
   }
@@ -711,9 +757,13 @@ function requestAchievementDesign(briefValue) {
   const brief = String(briefValue || "").trim();
   if (!brief || brief.length > 1000) throw new Error("design-brief-invalid");
   const document = readJson(DESIGN_REQUESTS_PATH, { schema_version: "agent-achievements/v1", requests: [] });
+  const sessions = activeSessions();
+  const focusSession = sessions.find((item) => item.status === "active") || sessions[0] || null;
   const request = {
     schema_version: "agent-achievements/v1",
     request_id: `design-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    ...(focusSession?.agent_id ? { agent_id: focusSession.agent_id } : {}),
+    ...(focusSession?.workspace ? { workspace: focusSession.workspace } : {}),
     brief,
     status: "pending",
     created_at: new Date().toISOString()
@@ -732,10 +782,30 @@ function requestAchievementDesign(briefValue) {
 function requestAchievementDiagnostic() {
   const release = acquireStateLock();
   try {
-    const request = createDiagnosticRequest("manual");
+    const sessions = activeSessions();
+    const focusSession = sessions.find((item) => item.status === "active") || sessions[0] || null;
+    const request = createDiagnosticRequest("manual", focusSession?.agent_id || null, focusSession?.workspace || null);
     lastPayload = "";
     sync();
     return { request_id: request.request_id, status: request.status };
+  } finally {
+    release();
+  }
+}
+
+function requestWuxingDiagnostic() {
+  const release = acquireStateLock();
+  try {
+    const state = readJson(STATE_PATH, emptyState());
+    const sessions = activeSessions();
+    const focusSession = sessions.find((item) => item.status === "active") || sessions[0] || null;
+    if (!focusSession?.agent_id) throw new Error("agent-not-connected");
+    if (!focusSession.workspace) throw new Error("workspace-not-detected");
+    const result = queueWuxingDiagnosticAction(state, focusSession.agent_id, focusSession.workspace);
+    if (result.created) writeJsonAtomic(STATE_PATH, result.state);
+    lastPayload = "";
+    sync();
+    return { action_id: result.action.action_id, status: result.action.status, created: result.created, workspace: result.action.workspace };
   } finally {
     release();
   }
@@ -767,25 +837,26 @@ function setAchievementTracking(achievementId, enabled) {
   if (enabled && achievement.tracking?.allowed === false) throw new Error("tracking-not-allowed");
   const focusSession = activeSessions().find((item) => item.status === "active") || activeSessions()[0] || null;
   const agentId = focusSession?.agent_id || state.awards?.at(-1)?.agent_id || eventRecords().at(-1)?.actor?.agent_id || null;
-  const migrated = migrateLegacyAutopilotBlocks(state, agentId);
-  const tracking = updateTrackedIds(agentTrackedIds(state, agentId), achievementId, enabled);
+  const workspace = focusSession?.workspace || null;
+  const migrated = migrateLegacyAutopilotBlocks(state, agentId, workspace);
+  const tracking = updateTrackedIds(agentTrackedIds(state, agentId, workspace), achievementId, enabled);
   if (tracking.trackingLimitReached) {
     if (migrated) writeJsonAtomic(STATE_PATH, state);
     return { achievement_id: achievementId, agent_id: agentId, tracked: false, tracking_limit_reached: true };
   }
   if (agentId) {
     state.tracking_records ||= [];
-    const record = state.tracking_records.find((item) => item.agent_id === agentId);
+    const record = state.tracking_records.find((item) => item.agent_id === agentId && sameWorkspace(item, workspace));
     if (record) record.achievement_ids = tracking.tracked;
-    else state.tracking_records.push({ agent_id: agentId, achievement_ids: tracking.tracked });
+    else state.tracking_records.push({ agent_id: agentId, ...(workspace ? { workspace } : {}), achievement_ids: tracking.tracked });
   } else {
     state.tracked = tracking.tracked;
   }
-  setAgentAchievementBlocked(state, agentId, achievementId, !enabled);
+  setAgentAchievementBlocked(state, agentId, achievementId, !enabled, workspace);
   writeJsonAtomic(STATE_PATH, state);
   lastPayload = "";
   sync();
-  return { achievement_id: achievementId, agent_id: agentId, tracked: enabled, tracking_limit_reached: false };
+  return { achievement_id: achievementId, agent_id: agentId, workspace, tracked: enabled, tracking_limit_reached: false };
   } finally {
     release();
   }
@@ -858,29 +929,9 @@ function setAlwaysOnTop(enabled) {
   return getAlwaysOnTop();
 }
 
-function openWuxingAssistant() {
-  if (wuxingWindow && !wuxingWindow.isDestroyed()) {
-    wuxingWindow.show();
-    wuxingWindow.focus();
-    return;
-  }
-  wuxingWindow = new BrowserWindow({
-    width: 1180,
-    height: 800,
-    minWidth: 760,
-    minHeight: 620,
-    title: APP_DISPLAY_NAME,
-    backgroundColor: "#e9e6dc",
-    autoHideMenuBar: true,
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
-  });
-  wuxingWindow.loadURL(WUXING_ASSISTANT_URL);
-  wuxingWindow.on("closed", () => { wuxingWindow = null; });
-}
-
 function refreshTrayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "打开规则体检", click: openWuxingAssistant },
+    { label: "诊断当前仓库", click: () => { try { requestWuxingDiagnostic(); } catch {} window.showInactive(); setExpanded(true); } },
     { label: "显示桌面伙伴", click: () => { window.showInactive(); revealFromEdge(); } },
     { label: "打开成就目录", click: () => shell.openPath(DATA_HOME) },
     { label: "窗口置顶", type: "checkbox", checked: getAlwaysOnTop(), click: (item) => setAlwaysOnTop(item.checked) },
@@ -957,7 +1008,7 @@ if (!hasSingleInstanceLock) {
     ipcMain.handle("companion:set-autostart", (_event, enabled) => setAutostart(Boolean(enabled)));
     ipcMain.handle("companion:get-always-on-top", () => getAlwaysOnTop());
     ipcMain.handle("companion:set-always-on-top", (_event, enabled) => setAlwaysOnTop(Boolean(enabled)));
-    ipcMain.handle("companion:open-wuxing", () => openWuxingAssistant());
+    ipcMain.handle("companion:request-wuxing-diagnostic", () => requestWuxingDiagnostic());
     ipcMain.handle("companion:save-achievement", (_event, input) => saveAchievement(input));
     ipcMain.handle("companion:set-achievement-tracking", (_event, achievementId, enabled) => setAchievementTracking(String(achievementId), Boolean(enabled)));
     ipcMain.handle("companion:request-achievement-design", (_event, brief) => requestAchievementDesign(brief));

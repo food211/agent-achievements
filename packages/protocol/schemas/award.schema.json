@@ -9,6 +9,7 @@
     "award_id": { "type": "string", "minLength": 1, "maxLength": 128 },
     "achievement_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,63}$" },
     "agent_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "workspace": { "type": "string", "minLength": 1, "maxLength": 1000 },
     "awarded_at": { "type": "string", "format": "date-time" },
     "awarded_by": { "enum": ["human", "system"] },
     "points": { "enum": [10, 30, 100] },

@@ -9,6 +9,7 @@
     "schema_version": { "const": "agent-achievements/v1" },
     "request_id": { "type": "string", "pattern": "^diagnostic-[a-z0-9-]{4,80}$" },
     "agent_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "workspace": { "type": "string", "minLength": 1, "maxLength": 1000 },
     "diagnosed_at": { "type": "string", "format": "date-time" },
     "sources": {
       "type": "object",

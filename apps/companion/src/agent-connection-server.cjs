@@ -41,7 +41,10 @@ function validIdentity(message) {
     && message.session_id.length <= 128
     && typeof message.runtime?.id === "string"
     && message.runtime.id.trim()
-    && message.runtime.id.length <= 80;
+    && message.runtime.id.length <= 80
+    && typeof message.workspace === "string"
+    && message.workspace.trim()
+    && message.workspace.length <= 1000;
 }
 
 function createAgentConnectionServer(options) {
@@ -62,8 +65,8 @@ function createAgentConnectionServer(options) {
     if (!socket.destroyed) socket.write(`${JSON.stringify(message)}\n`);
   }
 
-  function contextFor(agentId) {
-    try { return options.getContext?.(agentId) || {}; }
+  function contextFor(agentId, workspace) {
+    try { return options.getContext?.(agentId, workspace) || {}; }
     catch { return {}; }
   }
 
@@ -74,6 +77,7 @@ function createAgentConnectionServer(options) {
       session_id: connection.sessionId,
       agent_id: connection.agentId,
       runtime: { id: connection.runtimeId },
+      workspace: connection.workspace,
       status: connection.status === "active" ? "active" : "idle",
       observed_at: observedAt,
       expires_at: new Date(connection.lastSeen + CONNECTION_TTL_MS).toISOString(),
@@ -103,6 +107,7 @@ function createAgentConnectionServer(options) {
       agentId: message.agent_id.trim(),
       sessionId: message.session_id.trim(),
       runtimeId: message.runtime.id.trim(),
+      workspace: path.resolve(message.workspace.trim()),
       status: message.status === "active" ? "active" : "idle",
       currentTask: normalizedTask(message.current_task),
       lastSeen: now(),
@@ -110,7 +115,7 @@ function createAgentConnectionServer(options) {
     };
     connections.set(key, connection);
     socket.connectionKey = key;
-    const context = contextFor(connection.agentId);
+    const context = contextFor(connection.agentId, connection.workspace);
     connection.lastContext = JSON.stringify(context);
     send(socket, {
       type: "welcome",
@@ -129,9 +134,11 @@ function createAgentConnectionServer(options) {
     if (message.type === "ping") {
       send(connection.socket, { type: "pong", schema_version: VERSION, observed_at: new Date(connection.lastSeen).toISOString() });
     } else if (message.type === "status") {
+      if (typeof message.workspace === "string" && message.workspace.trim()) connection.workspace = path.resolve(message.workspace.trim());
       if (new Set(["active", "idle", "stopped"]).has(message.status)) connection.status = message.status === "active" ? "active" : "idle";
       connection.currentTask = message.status === "stopped" ? null : normalizedTask(message.current_task);
     } else if (message.type === "task") {
+      if (typeof message.workspace === "string" && message.workspace.trim()) connection.workspace = path.resolve(message.workspace.trim());
       connection.currentTask = normalizedTask(message.current_task);
       connection.status = connection.currentTask ? "active" : "idle";
     } else if (message.type === "context_request") {
@@ -184,7 +191,7 @@ function createAgentConnectionServer(options) {
 
   function refreshContexts() {
     for (const connection of connections.values()) {
-      const context = contextFor(connection.agentId);
+      const context = contextFor(connection.agentId, connection.workspace);
       const signature = JSON.stringify(context);
       if (signature === connection.lastContext) continue;
       connection.lastContext = signature;

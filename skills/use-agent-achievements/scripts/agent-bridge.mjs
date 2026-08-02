@@ -266,6 +266,7 @@ async function readActivity(dataHome, identity) {
     return {
       status: "idle",
       known: false,
+      workspace: identity.workspace,
       observedAt: isoNow(),
       presenceSessionId: null,
       currentTask: null
@@ -274,6 +275,7 @@ async function readActivity(dataHome, identity) {
   return {
     status: session.status,
     known: true,
+    workspace: typeof session.workspace === "string" ? session.workspace : identity.workspace,
     observedAt: session.observed_at || isoNow(),
     presenceSessionId: session.session_id,
     currentTask: session.current_task && typeof session.current_task === "object" ? safeJson(session.current_task) : null
@@ -347,7 +349,7 @@ function writeLine(socket, message) {
 }
 
 function activityFingerprint(activity) {
-  return stableJson({ status: activity.status, known: activity.known, current_task: activity.currentTask });
+  return stableJson({ status: activity.status, known: activity.known, workspace: activity.workspace, current_task: activity.currentTask });
 }
 
 export class AgentBridge {
@@ -356,7 +358,8 @@ export class AgentBridge {
     this.identity = {
       agentId: validatedIdentity(options.agentId, "agent_id", 128),
       runtimeId: validatedIdentity(options.runtimeId, "runtime_id", 80),
-      sessionId: validatedIdentity(options.sessionId, "session_id", 128)
+      sessionId: validatedIdentity(options.sessionId, "session_id", 128),
+      workspace: path.resolve(options.workspace || process.cwd())
     };
     this.endpointOverride = options.endpoint || "";
     this.tokenOverride = options.token || "";
@@ -379,6 +382,7 @@ export class AgentBridge {
       agent_id: this.identity.agentId,
       session_id: this.identity.sessionId,
       runtime: { id: this.identity.runtimeId },
+      workspace: this.identity.workspace,
       status,
       observed_at: isoNow(),
       endpoint: this.currentEndpoint,
@@ -482,6 +486,7 @@ export class AgentBridge {
             schema_version: VERSION,
             agent_id: identity.agentId,
             session_id: identity.sessionId,
+            workspace: identity.workspace,
             sent_at: isoNow()
           });
         }, heartbeatMs);
@@ -496,6 +501,7 @@ export class AgentBridge {
             schema_version: VERSION,
             agent_id: identity.agentId,
             session_id: identity.sessionId,
+            workspace: activity.workspace || identity.workspace,
             status: activity.status,
             activity_known: activity.known,
             observed_at: activity.observedAt,
@@ -517,6 +523,7 @@ export class AgentBridge {
             schema_version: VERSION,
             agent_id: identity.agentId,
             session_id: identity.sessionId,
+            workspace: activity.workspace || identity.workspace,
             current_task: forwardedTask,
             observed_at: activity.observedAt
           });
@@ -573,6 +580,7 @@ export class AgentBridge {
           agent_id: identity.agentId,
           session_id: identity.sessionId,
           runtime: { id: identity.runtimeId },
+          workspace: initialActivity.workspace || identity.workspace,
           ...(initialActivity.currentTask ? { current_task: initialActivity.currentTask } : {})
         };
         writeLine(socket, hello);
@@ -653,6 +661,7 @@ async function main() {
     agentId: options.agent,
     runtimeId: options.runtime,
     sessionId: options.session,
+    workspace: options.workspace ? path.resolve(options.workspace) : process.cwd(),
     endpoint: options.endpoint,
     token: options.token,
     once: options.once,

@@ -108,14 +108,18 @@ function calculateScore(achievements, awards) {
   }, 0);
 }
 
-function calculateAgentScore(achievements, awards, agentId) {
-  const scopedAwards = agentId ? (awards || []).filter((item) => item.agent_id === agentId) : awards;
+function sameWorkspace(record, workspace) {
+  return workspace ? record?.workspace === workspace : !record?.workspace;
+}
+
+function calculateAgentScore(achievements, awards, agentId, workspace = null) {
+  const scopedAwards = agentId ? (awards || []).filter((item) => item.agent_id === agentId && sameWorkspace(item, workspace)) : awards;
   return calculateScore(achievements, scopedAwards);
 }
 
-function progressValue(state, achievementId, agentId) {
+function progressValue(state, achievementId, agentId, workspace = null) {
   const record = agentId
-    ? state?.progress_records?.find((item) => item.agent_id === agentId && item.achievement_id === achievementId)
+    ? state?.progress_records?.find((item) => item.agent_id === agentId && item.achievement_id === achievementId && sameWorkspace(item, workspace))
     : null;
   const value = agentId
     ? record?.current
@@ -187,14 +191,14 @@ function scoreLevel(score) {
   };
 }
 
-function challengeView(achievement, state, agentId) {
+function challengeView(achievement, state, agentId, workspace = null) {
   if (!achievement) return null;
   const tier = tierMetadata(achievement);
   return {
     id: achievement.achievement_id,
     title: achievement.title,
     intent: achievement.intent,
-    current: progressValue(state, achievement.achievement_id, agentId),
+    current: progressValue(state, achievement.achievement_id, agentId, workspace),
     target: achievement.condition?.target || 1,
     unit: achievement.condition?.unit || "events",
     encouragement: achievement.tracking?.encouragement || achievement.intent,
@@ -203,24 +207,24 @@ function challengeView(achievement, state, agentId) {
   };
 }
 
-function agentBlockedAchievementIds(state, agentId) {
+function agentBlockedAchievementIds(state, agentId, workspace = null) {
   if (!agentId || !Array.isArray(state?.tracking_preferences)) return [];
-  const preference = state.tracking_preferences.find((item) => item?.agent_id === agentId);
+  const preference = state.tracking_preferences.find((item) => item?.agent_id === agentId && sameWorkspace(item, workspace));
   return Array.isArray(preference?.blocked_achievement_ids)
     ? [...new Set(preference.blocked_achievement_ids.filter((item) => typeof item === "string" && item))]
     : [];
 }
 
-function setAgentAchievementBlocked(state, agentId, achievementId, blocked) {
+function setAgentAchievementBlocked(state, agentId, achievementId, blocked, workspace = null) {
   if (!agentId || !achievementId) return { state, changed: false };
   state.tracking_preferences ||= [];
-  let preference = state.tracking_preferences.find((item) => item?.agent_id === agentId);
+  let preference = state.tracking_preferences.find((item) => item?.agent_id === agentId && sameWorkspace(item, workspace));
   const created = !preference;
   if (!preference) {
-    preference = { agent_id: agentId, blocked_achievement_ids: [] };
+    preference = { agent_id: agentId, ...(workspace ? { workspace } : {}), blocked_achievement_ids: [] };
     state.tracking_preferences.push(preference);
   }
-  const original = agentBlockedAchievementIds(state, agentId);
+  const original = agentBlockedAchievementIds(state, agentId, workspace);
   const next = new Set(original);
   if (blocked) next.add(achievementId);
   else next.delete(achievementId);
@@ -231,10 +235,11 @@ function setAgentAchievementBlocked(state, agentId, achievementId, blocked) {
 }
 
 function chooseChallenges(state, score, agentId, options = {}) {
+  const workspace = options.workspace || null;
   const awardedIds = new Set((state.awards || [])
-    .filter((item) => !agentId || item.agent_id === agentId)
+    .filter((item) => (!agentId || item.agent_id === agentId) && sameWorkspace(item, workspace))
     .map((item) => item.achievement_id));
-  const blockedIds = new Set(options.blockedIds || agentBlockedAchievementIds(state, agentId));
+  const blockedIds = new Set(options.blockedIds || agentBlockedAchievementIds(state, agentId, workspace));
   const allowedIds = Array.isArray(options.allowedIds) ? new Set(options.allowedIds) : null;
   const candidates = (state.achievements || [])
     .filter((item) => item.tracking?.allowed !== false
@@ -255,12 +260,13 @@ function chooseChallenges(state, score, agentId, options = {}) {
 function alignAutopilotTracking(state, options = {}) {
   state.tracked ||= [];
   state.tracking_records ||= [];
-  const score = calculateAgentScore(state.achievements, state.awards, options.agentId);
-  const blockedIds = new Set(options.blockedIds || agentBlockedAchievementIds(state, options.agentId));
-  const { current } = chooseChallenges(state, score, options.agentId, { blockedIds: [...blockedIds] });
+  const workspace = options.workspace || null;
+  const score = calculateAgentScore(state.achievements, state.awards, options.agentId, workspace);
+  const blockedIds = new Set(options.blockedIds || agentBlockedAchievementIds(state, options.agentId, workspace));
+  const { current } = chooseChallenges(state, score, options.agentId, { blockedIds: [...blockedIds], workspace });
   const defaultIds = new Set(DEFAULT_WUXING_CHALLENGES.map((item) => item.achievement_id));
   const trackingRecord = options.agentId
-    ? state.tracking_records.find((item) => item.agent_id === options.agentId)
+    ? state.tracking_records.find((item) => item.agent_id === options.agentId && sameWorkspace(item, workspace))
     : null;
   const originalTracked = options.agentId ? (trackingRecord?.achievement_ids || []) : state.tracked;
   const eligibleTracked = originalTracked.filter((id) => !blockedIds.has(id));
@@ -276,16 +282,16 @@ function alignAutopilotTracking(state, options = {}) {
   const changed = tracked.length !== originalTracked.length || tracked.some((id, index) => id !== originalTracked[index]);
   if (options.agentId) {
     if (trackingRecord) trackingRecord.achievement_ids = tracked;
-    else if (tracked.length) state.tracking_records.push({ agent_id: options.agentId, achievement_ids: tracked });
+    else if (tracked.length) state.tracking_records.push({ agent_id: options.agentId, ...(workspace ? { workspace } : {}), achievement_ids: tracked });
   } else {
     state.tracked = tracked;
   }
   return { state, changed };
 }
 
-function completedTaskViews(events, limit = 5, agentId) {
+function completedTaskViews(events, limit = 5, agentId, workspace = null) {
   const completed = (events || [])
-    .filter((event) => (!agentId || event?.actor?.agent_id === agentId) && event?.task?.id && (
+    .filter((event) => (!agentId || event?.actor?.agent_id === agentId) && (!workspace || event?.extensions?.workspace === workspace) && event?.task?.id && (
       event.event_type === "task.completed"
       || event.outcome?.status === "completed"
       || event.event_type === "verification.completed"
@@ -312,12 +318,13 @@ function completedTaskViews(events, limit = 5, agentId) {
 }
 
 function buildAutopilotView(state, events = [], options = {}) {
-  const score = calculateAgentScore(state.achievements || [], state.awards || [], options.agentId);
+  const workspace = options.workspace || null;
+  const score = calculateAgentScore(state.achievements || [], state.awards || [], options.agentId, workspace);
   const level = scoreLevel(score);
-  const blockedIds = options.blockedIds || agentBlockedAchievementIds(state, options.agentId);
-  const challenges = chooseChallenges(state, score, options.agentId, { blockedIds });
-  const current = challengeView(challenges.current, state, options.agentId);
-  const next = challengeView(challenges.next, state, options.agentId);
+  const blockedIds = options.blockedIds || agentBlockedAchievementIds(state, options.agentId, workspace);
+  const challenges = chooseChallenges(state, score, options.agentId, { blockedIds, workspace });
+  const current = challengeView(challenges.current, state, options.agentId, workspace);
+  const next = challengeView(challenges.next, state, options.agentId, workspace);
   return {
     enabled: true,
     autostart_enabled: Boolean(options.autostartEnabled),
@@ -331,13 +338,15 @@ function buildAutopilotView(state, events = [], options = {}) {
     current_challenge: current,
     next_challenge: next,
     agent_id: options.agentId || null,
-    completed_tasks: completedTaskViews(events, 5, options.agentId)
+    workspace,
+    completed_tasks: completedTaskViews(events, 5, options.agentId, workspace)
   };
 }
 
 function buildAgentConnectionContext(state, events, agentId, options = {}) {
-  const blockedIds = options.blockedIds || agentBlockedAchievementIds(state, agentId);
-  const automation = buildAutopilotView(state, events, { agentId, blockedIds, autostartEnabled: options.autostartEnabled });
+  const workspace = options.workspace || null;
+  const blockedIds = options.blockedIds || agentBlockedAchievementIds(state, agentId, workspace);
+  const automation = buildAutopilotView(state, events, { agentId, workspace, blockedIds, autostartEnabled: options.autostartEnabled });
   const levelId = { observe: "starter", momentum: "growing", balance: "seasoned" }[automation.level.id] || "starter";
   const encouragementTone = { starter: "gentle", growing: "steady", seasoned: "mastery" }[levelId];
   const canonicalChallenge = (challenge) => challenge ? {
@@ -350,14 +359,14 @@ function buildAgentConnectionContext(state, events, agentId, options = {}) {
     relevance_reason: "由积分等级与尚未完成的五行挑战共同推荐；只在当前任务自然相关时参考。",
     guardrails: challenge.guardrails
   } : null;
-  const awards = (state.awards || []).filter((item) => item.agent_id === agentId);
+  const awards = (state.awards || []).filter((item) => item.agent_id === agentId && sameWorkspace(item, workspace));
   const awardedIds = new Set(awards.map((item) => item.achievement_id));
-  const trackingRecord = state.tracking_records?.find((item) => item.agent_id === agentId);
+  const trackingRecord = state.tracking_records?.find((item) => item.agent_id === agentId && sameWorkspace(item, workspace));
   const blockedSet = new Set(blockedIds);
   const trackedIds = (trackingRecord?.achievement_ids || []).filter((item) => !blockedSet.has(item));
-  const trackedChallenges = chooseChallenges(state, automation.score, agentId, { blockedIds, allowedIds: trackedIds });
-  const activeChallenge = canonicalChallenge(challengeView(trackedChallenges.current, state, agentId));
-  const nextChallenge = canonicalChallenge(challengeView(trackedChallenges.next, state, agentId));
+  const trackedChallenges = chooseChallenges(state, automation.score, agentId, { blockedIds, allowedIds: trackedIds, workspace });
+  const activeChallenge = canonicalChallenge(challengeView(trackedChallenges.current, state, agentId, workspace));
+  const nextChallenge = canonicalChallenge(challengeView(trackedChallenges.next, state, agentId, workspace));
   const tracked = (state.achievements || [])
     .filter((item) => item.tracking?.allowed !== false && trackedIds.includes(item.achievement_id) && !awardedIds.has(item.achievement_id))
     .slice(0, 3)
@@ -365,7 +374,7 @@ function buildAgentConnectionContext(state, events, agentId, options = {}) {
       achievement_id: item.achievement_id,
       title: item.title,
       ...tierMetadata(item),
-      progress: { current: progressValue(state, item.achievement_id, agentId), target: item.condition?.target || 1, unit: item.condition?.unit || "events" },
+      progress: { current: progressValue(state, item.achievement_id, agentId, workspace), target: item.condition?.target || 1, unit: item.condition?.unit || "events" },
       encouragement: item.tracking?.encouragement || item.intent,
       guardrails: item.tracking?.guardrails || []
     }));
@@ -382,7 +391,7 @@ function buildAgentConnectionContext(state, events, agentId, options = {}) {
     };
   });
   const agentActions = (state.agent_actions || [])
-    .filter((item) => item.agent_id === agentId && item.status === "pending" && new Set(["ensure_companion_running", "ensure_agent_bridge", "run_wuxing_diagnostic", "diagnose_past_achievements"]).has(item.action))
+    .filter((item) => item.agent_id === agentId && item.status === "pending" && (!workspace || !item.workspace || item.workspace === workspace) && new Set(["ensure_companion_running", "ensure_agent_bridge", "run_wuxing_diagnostic", "diagnose_past_achievements"]).has(item.action))
     .slice(0, 4)
     .map((item) => ({
       action_id: item.action_id,
@@ -400,6 +409,7 @@ function buildAgentConnectionContext(state, events, agentId, options = {}) {
   return {
     schema_version: "agent-achievements/v1",
     agent_id: agentId,
+    ...(workspace ? { workspace } : {}),
     recently_awarded: recentlyAwarded,
     tracked,
     motivation: {
@@ -422,8 +432,8 @@ function hasTrustedEvidence(claim) {
   return claim.evidence.some((item) => DIRECT_EVIDENCE_TYPES.has(item?.type) && String(item?.ref || "").trim());
 }
 
-function reachedTarget(state, achievement, agentId) {
-  return progressValue(state, achievement.achievement_id, agentId) >= (achievement.condition?.target || 1);
+function reachedTarget(state, achievement, agentId, workspace = null) {
+  return progressValue(state, achievement.achievement_id, agentId, workspace) >= (achievement.condition?.target || 1);
 }
 
 function evidenceTypes(claim) {
@@ -447,7 +457,7 @@ function trustedAutomaticClaim(achievement, claim, state) {
   if (achievement.origin === "human_created" || achievement.extensions?.created_by === "human") return false;
   if (achievement.extensions?.autopilot_managed !== true) return false;
   if (!TRUSTED_AUTOMATION_SOURCES.has(achievement.extensions?.source_skill)) return false;
-  if (!reachedTarget(state, achievement, claim.agent_id) || !evidenceMatchesAchievement(achievement, claim)) return false;
+  if (!reachedTarget(state, achievement, claim.agent_id, claim.workspace || null) || !evidenceMatchesAchievement(achievement, claim)) return false;
   return Array.isArray(claim.task_ids) && claim.task_ids.length > 0;
 }
 
@@ -464,6 +474,7 @@ function buildAward(achievement, claim, options = {}) {
     award_id: `award-${now.getTime().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
     achievement_id: claim.achievement_id,
     agent_id: claim.agent_id,
+    ...(claim.workspace ? { workspace: claim.workspace } : {}),
     awarded_at: now.toISOString(),
     awarded_by: systemAward ? "system" : "human",
     points: tier.points,
@@ -481,7 +492,7 @@ function settleTrustedAutomaticClaims(state, claims, options = {}) {
     if (claim.status !== "pending_human_review") continue;
     const achievement = (state.achievements || []).find((item) => item.achievement_id === claim.achievement_id);
     if (!trustedAutomaticClaim(achievement, claim, state)) continue;
-    const duplicate = state.awards.some((item) => item.achievement_id === claim.achievement_id && item.agent_id === claim.agent_id);
+    const duplicate = state.awards.some((item) => item.achievement_id === claim.achievement_id && item.agent_id === claim.agent_id && sameWorkspace(item, claim.workspace || null));
     claim.status = "awarded";
     claim.reviewed_at = (options.now || new Date()).toISOString();
     claim.review_policy = "trusted_autopilot";
@@ -501,7 +512,7 @@ function reviewPendingClaim(state, claims, claimId, decision, feedback, options 
   if (!claim || claim.status !== "pending_human_review") throw new Error("claim-not-found");
   const achievement = (state.achievements || []).find((item) => item.achievement_id === claim.achievement_id);
   if (!achievement) throw new Error("achievement-not-found");
-  if (decision === "award" && !reachedTarget(state, achievement, claim.agent_id)) throw new Error("achievement-not-earned");
+  if (decision === "award" && !reachedTarget(state, achievement, claim.agent_id, claim.workspace || null)) throw new Error("achievement-not-earned");
   if (decision === "award" && achievement.evidence_required && (!Array.isArray(claim.evidence) || !claim.evidence.length)) throw new Error("claim-evidence-insufficient");
   const now = options.now || new Date();
   claim.status = decision === "award" ? "awarded" : "rejected";
@@ -512,7 +523,7 @@ function reviewPendingClaim(state, claims, claimId, decision, feedback, options 
       : `这次暂不授予“${achievement.title}”：现有记录还不足以确认达成。`)
       .slice(0, 600);
   let award = null;
-  if (decision === "award" && !state.awards.some((item) => item.achievement_id === claim.achievement_id && item.agent_id === claim.agent_id)) {
+  if (decision === "award" && !state.awards.some((item) => item.achievement_id === claim.achievement_id && item.agent_id === claim.agent_id && sameWorkspace(item, claim.workspace || null))) {
     award = buildAward(achievement, claim, { now, awardedBy: "human", feedback: claim.human_feedback });
     state.awards.push(award);
   }
@@ -610,13 +621,15 @@ function buildSystemAchievement(discovery, options = {}) {
         diagnostic_id: diagnosticId,
         discovery_key: discoveryKey,
         created_by: "system",
-        created_at: now.toISOString()
+        created_at: now.toISOString(),
+        ...(options.workspace ? { workspace: options.workspace } : {})
       }
     },
     award: {
       award_id: `award-${digest}-${normalizedId(discovery.discovery_id, 24)}`,
       achievement_id: achievementId,
       agent_id: options.agentId || "unknown-agent",
+      ...(options.workspace ? { workspace: options.workspace } : {}),
       awarded_at: now.toISOString(),
       awarded_by: "system",
       points,
@@ -646,6 +659,7 @@ function settleDiagnosticReport(state, report, options = {}) {
     const built = buildSystemAchievement(discovery, {
       diagnosticId: report.request_id,
       agentId: report.agent_id,
+      workspace: options.workspace || report.workspace,
       now: options.now
     });
     if (state.awards.some((item) => item.discovery_key === built.award.discovery_key)) continue;
@@ -667,6 +681,33 @@ function updateTrackedIds(currentIds, achievementId, enabled, limit = 3) {
   return { tracked: [...tracked], trackingLimitReached: false };
 }
 
+function queueWuxingDiagnosticAction(state, agentId, workspace, options = {}) {
+  const normalizedAgentId = String(agentId || "").trim();
+  const normalizedWorkspace = String(workspace || "").trim();
+  if (!normalizedAgentId) throw new Error("agent-required");
+  if (!normalizedWorkspace) throw new Error("workspace-required");
+  state.agent_actions ||= [];
+  const existing = state.agent_actions.find((item) => item.agent_id === normalizedAgentId
+    && item.workspace === normalizedWorkspace
+    && item.action === "run_wuxing_diagnostic"
+    && item.status === "pending");
+  if (existing) return { state, action: existing, created: false };
+  const now = options.now || new Date().toISOString();
+  const action = {
+    action_id: options.actionId || `action-wuxing-manual-${createHash("sha256").update(`${normalizedAgentId}\u0000${normalizedWorkspace}\u0000${now}`).digest("hex").slice(0, 24)}`,
+    agent_id: normalizedAgentId,
+    workspace: normalizedWorkspace,
+    action: "run_wuxing_diagnostic",
+    status: "pending",
+    reason: "manual",
+    instructions: "加载 wuxing-harness Skill，对 action.workspace 指向的仓库启动或恢复分阶段规则诊断。每轮只问当前问题；回答不具体就追一个真实实例。不要跳转展示页面，也不要用一次扫描代替访谈。",
+    guardrails: ["只诊断当前仓库", "不阻塞其他独立任务", "未经人明确批准不修改高优先级规则"],
+    created_at: now
+  };
+  state.agent_actions.push(action);
+  return { state, action, created: true };
+}
+
 module.exports = {
   agentBlockedAchievementIds,
   alignAutopilotTracking,
@@ -680,6 +721,7 @@ module.exports = {
   DEFAULT_WUXING_CHALLENGES,
   ensureDefaultWuxingChallenges,
   reviewPendingClaim,
+  queueWuxingDiagnosticAction,
   scoreLevel,
   settleDiagnosticReport,
   settleTrustedAutomaticClaims,

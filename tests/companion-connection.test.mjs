@@ -43,6 +43,7 @@ function hello(endpoint, overrides = {}) {
     agent_id: "agent-a",
     session_id: "session-a",
     runtime: { id: "test-agent" },
+    workspace: process.cwd(),
     ...overrides
   };
 }

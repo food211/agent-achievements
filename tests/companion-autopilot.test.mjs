@@ -15,11 +15,42 @@ const {
   buildAutopilotView,
   calculateAgentScore,
   ensureDefaultWuxingChallenges,
+  queueWuxingDiagnosticAction,
   reviewPendingClaim,
   scoreLevel,
   setAgentAchievementBlocked,
   settleTrustedAutomaticClaims
 } = require("../apps/companion/src/achievement-factory.cjs");
+
+test("diagnosis actions and achievement progress are isolated by repository", () => {
+  const state = emptyState();
+  ensureDefaultWuxingChallenges(state);
+  state.tracking_records = [
+    { agent_id: "agent-a", workspace: "F:/repo-a", achievement_ids: ["wuxing-rule-gardener"] },
+    { agent_id: "agent-a", workspace: "F:/repo-b", achievement_ids: ["wuxing-product-gatekeeper"] }
+  ];
+  state.progress_records = [
+    { agent_id: "agent-a", workspace: "F:/repo-a", achievement_id: "wuxing-rule-gardener", current: 1 },
+    { agent_id: "agent-a", workspace: "F:/repo-b", achievement_id: "wuxing-product-gatekeeper", current: 2 }
+  ];
+  state.awards.push({ agent_id: "agent-a", workspace: "F:/repo-a", achievement_id: "wuxing-rule-gardener" });
+
+  const repoA = buildAgentConnectionContext(state, [], "agent-a", { workspace: "F:/repo-a" });
+  const repoB = buildAgentConnectionContext(state, [], "agent-a", { workspace: "F:/repo-b" });
+  assert.equal(repoA.workspace, "F:/repo-a");
+  assert.equal(repoA.motivation.total_points, 30);
+  assert.equal(repoA.recently_awarded[0].achievement_id, "wuxing-rule-gardener");
+  assert.equal(repoB.motivation.total_points, 0);
+  assert.equal(repoB.tracked[0].progress.current, 2);
+
+  const first = queueWuxingDiagnosticAction(state, "agent-a", "F:/repo-a", { actionId: "diagnose-a", now: "2026-08-02T00:00:00.000Z" });
+  const duplicate = queueWuxingDiagnosticAction(state, "agent-a", "F:/repo-a", { actionId: "diagnose-a-duplicate", now: "2026-08-02T00:01:00.000Z" });
+  const otherRepo = queueWuxingDiagnosticAction(state, "agent-a", "F:/repo-b", { actionId: "diagnose-b", now: "2026-08-02T00:02:00.000Z" });
+  assert.equal(first.created, true);
+  assert.equal(duplicate.created, false);
+  assert.equal(otherRepo.created, true);
+  assert.deepEqual(state.agent_actions.map((item) => item.workspace), ["F:/repo-a", "F:/repo-b"]);
+});
 
 function emptyState() {
   return {

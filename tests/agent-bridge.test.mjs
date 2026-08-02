@@ -304,7 +304,10 @@ test("the persistent bridge rotates endpoints, pings, and refuses a duplicate in
   assert.equal(duplicateResult.code, 0, duplicateResult.stderr);
   assert.equal(JSON.parse(duplicateResult.stdout).status, "already_running");
 
-  await waitFor(() => secondMessages.some((message) => message.type === "ping"), 6_000);
+  await waitFor(() => secondMessages.some((message) => message.type === "ping"), 6_000).catch((error) => {
+    const output = running.output();
+    throw new Error(`${error.message}\nsecond messages: ${JSON.stringify(secondMessages)}\nbridge stdout: ${output.stdout}\nbridge stderr: ${output.stderr}`);
+  });
   assert.equal(secondMessages.some((message) => message.type === "hello"), true);
   const connectedStatus = JSON.parse(await readFile(path.join(home, "bridges", `${bridgeHash("agent-reconnect")}.json`), "utf8"));
   assert.equal(connectedStatus.status, "connected");

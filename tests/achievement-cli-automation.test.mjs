@@ -146,6 +146,34 @@ test("report isolates Agents, deduplicates units, auto-creates claims, and only 
   assert.ok(agentB.tracked.every((item) => item.progress.current === 0));
 });
 
+test("one Agent keeps progress, score, tracking, and queued work isolated per repository", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "achievement-workspaces-"));
+  const repoA = path.join(home, "repo-a");
+  const repoB = path.join(home, "repo-b");
+  run(home, ["bootstrap", "--agent", "agent-a", "--runtime", "test", "--workspace", repoA]);
+  run(home, ["bootstrap", "--agent", "agent-a", "--runtime", "test", "--workspace", repoB]);
+
+  const repoAEvent = event({ extensions: { workspace: repoA } });
+  run(home, ["report", "--input", await input(home, "repo-a-event.json", repoAEvent)]);
+  run(home, ["track", "--agent", "agent-a", "--workspace", repoA, "--achievement", "wuxing-product-gatekeeper", "--enabled", "false"]);
+  run(home, ["design-request", "--agent", "agent-a", "--workspace", repoA, "--brief", "只属于仓库 A 的成就"]);
+  run(home, ["diagnostic-request", "--agent", "agent-a", "--workspace", repoA, "--reason", "manual"]);
+
+  const contextA = run(home, ["context", "--agent", "agent-a", "--workspace", repoA]);
+  const contextB = run(home, ["context", "--agent", "agent-a", "--workspace", repoB]);
+  assert.equal(contextA.workspace, path.resolve(repoA));
+  assert.equal(contextB.workspace, path.resolve(repoB));
+  assert.equal(contextA.motivation.total_points, 30);
+  assert.equal(contextB.motivation.total_points, 0);
+  assert.equal(contextA.tracked.some((item) => item.achievement_id === "wuxing-product-gatekeeper"), false);
+  assert.equal(contextB.tracked.some((item) => item.achievement_id === "wuxing-product-gatekeeper"), true);
+  assert.equal(contextA.design_requests.length, 1);
+  assert.equal(contextB.design_requests.length, 0);
+  assert.equal(contextA.diagnostic_requests.length, 1);
+  assert.equal(contextB.diagnostic_requests.length, 1);
+  assert.notEqual(contextA.diagnostic_requests[0].request_id, contextB.diagnostic_requests[0].request_id);
+});
+
 test("qualified_tasks, human_only, and weak automatic evidence honor their protocol boundaries", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "achievement-modes-"));
   run(home, ["bootstrap", "--agent", "agent-a", "--runtime", "test", "--workspace", process.cwd()]);
