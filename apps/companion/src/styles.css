@@ -5,7 +5,11 @@ button { font: inherit; }
 .drag { -webkit-app-region: drag; -webkit-user-select: none; user-select: none; }
 .no-drag, button { -webkit-app-region: no-drag; }
 
+.pet-stage { position:absolute; inset:0; width:94px; height:100px; }
 .pet-shell { position: absolute; inset: 0; width: 94px; height: 100px; padding: 16px 16px 22px; border: 0; border-radius: 28px; background: radial-gradient(circle at 50% 45%, rgba(255,210,91,.13), transparent 66%); cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; }
+.pet-achievements { position:absolute; z-index:3; top:6px; right:5px; width:31px; height:31px; padding:0; display:grid; place-items:center; border:1px solid rgba(255,221,132,.38); border-radius:50%; background:rgba(27,25,31,.96); box-shadow:0 5px 16px rgba(0,0,0,.34),0 0 10px rgba(235,177,55,.18); cursor:pointer; opacity:0; pointer-events:none; transform:translate(-5px,6px) scale(.72); transition:opacity .15s ease,transform .18s cubic-bezier(.2,.8,.2,1),border-color .15s ease; }
+.pet-stage:hover .pet-achievements,.pet-achievements:focus-visible { opacity:1; pointer-events:auto; transform:translate(0,0) scale(1); }
+.pet-achievements:hover { border-color:rgba(255,221,132,.75); transform:scale(1.05) !important; }
 .pet-shell.pressed { cursor: grabbing; }
 .pet-shell.dragging .avatar { transform: scale(.96); filter: brightness(1.08); }
 .avatar { position: relative; width: 62px; height: 62px; display: grid; place-items: center; overflow: visible; border: 1px solid rgba(255,223,133,.26); border-radius: 21px; background: linear-gradient(150deg, rgba(44,39,59,.96), rgba(18,18,25,.96)); box-shadow: 0 6px 16px rgba(0,0,0,.3), 0 0 17px rgba(246,183,58,.15); animation: float 3.4s ease-in-out infinite; }
@@ -125,6 +129,7 @@ body.theme-light .primary-action { color:#29493b; border-color:rgba(42,75,62,.16
 body.theme-light .primary-action:hover { border-color:rgba(146,83,64,.3); background:rgba(255,255,255,.68); }
 body.theme-light .workspace-heading select { color:#29493b; }body.theme-light .diagnosis-request-status { color:#47725f; }
 body.theme-light .agent-conversation { border-color:rgba(42,99,72,.2); background:rgba(255,255,255,.36); }body.theme-light .agent-messages article { background:rgba(255,255,255,.55); }body.theme-light .agent-messages article.from-user { background:rgba(146,83,64,.09); }body.theme-light .agent-messages p,body.theme-light .agent-conversation textarea { color:#294238; }body.theme-light .agent-conversation textarea { border-color:rgba(42,75,62,.16); background:rgba(255,255,255,.5); }
+body.theme-light .agent-conversation form button { color:#f5fff9; border-color:#4f8069; background:#4f8069; font-weight:700; }
 body.theme-light .wuxing-action span { color:#3f6f59; background:rgba(63,111,89,.11); }
 body.theme-light .achievement-action span { color:#925340; background:rgba(146,83,64,.1); }
 body.theme-light .achievement-card,body.theme-light .cards article,body.theme-light .autostart,body.theme-light .appearance,body.theme-light .diagnostic-card,body.theme-light .companion-settings { border-color:rgba(42,75,62,.13); background:rgba(255,255,255,.38); }

@@ -1,4 +1,5 @@
 const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, shell, Tray } = require("electron");
+const { DEFAULT_SIZE: BUBBLE_SIZE, bubbleMessage, bubblePlacement } = require("./companion-bubble.cjs");
 const { spawn } = require("node:child_process");
 const { createHash } = require("node:crypto");
 const fs = require("node:fs");
@@ -56,6 +57,10 @@ let tray;
 let agentConnectionServer;
 let codexAcpClient;
 let expanded = false;
+let bubbleWindow = null;
+let bubbleTimer = null;
+let bubbleMode = null;
+let previousBubblePayload = null;
 let lastPayload = "";
 let quitting = false;
 let movingProgrammatically = false;
@@ -337,6 +342,7 @@ function setFocusWorkspace(agentId, workspace) {
   writeSettings();
   lastPayload = "";
   sync();
+  codexAcpClient?.connect(workspace).catch(() => { lastPayload = ""; sync(); });
   return { agent_id: agentId, workspace };
 }
 
@@ -657,6 +663,53 @@ function setWindowBounds(bounds, animate = true) {
   setTimeout(() => { movingProgrammatically = false; }, 120);
 }
 
+function placeBubble() {
+  if (!bubbleWindow || bubbleWindow.isDestroyed() || !window || window.isDestroyed()) return;
+  const petBounds = window.getBounds();
+  const work = screen.getDisplayMatching(petBounds).workArea;
+  const size = bubbleMode === "chat" ? { width: 342, height: 318 } : BUBBLE_SIZE;
+  const placement = bubblePlacement(petBounds, work, size);
+  bubbleWindow.setBounds(placement.bounds, false);
+  if (!bubbleWindow.webContents.isLoading()) bubbleWindow.webContents.send("companion:bubble-placement", placement);
+  return placement;
+}
+
+function hideBubble() {
+  clearTimeout(bubbleTimer);
+  bubbleTimer = null;
+  bubbleMode = null;
+  if (bubbleWindow && !bubbleWindow.isDestroyed()) bubbleWindow.hide();
+}
+
+function showBubble(message) {
+  if (!message || expanded || bubbleMode === "chat" || !bubbleWindow || bubbleWindow.isDestroyed()) return;
+  clearTimeout(bubbleTimer);
+  bubbleMode = "notification";
+  const placement = placeBubble();
+  bubbleWindow.webContents.send("companion:bubble-mode", "notification");
+  bubbleWindow.webContents.send("companion:bubble-message", { ...message, ...placement });
+  bubbleWindow.showInactive();
+  bubbleTimer = setTimeout(hideBubble, 7200);
+}
+
+function showChat() {
+  if (!bubbleWindow || bubbleWindow.isDestroyed() || expanded) return;
+  clearTimeout(bubbleTimer);
+  bubbleTimer = null;
+  bubbleMode = "chat";
+  const placement = placeBubble();
+  bubbleWindow.webContents.send("companion:bubble-mode", "chat");
+  bubbleWindow.webContents.send("companion:bubble-placement", placement);
+  bubbleWindow.webContents.send("companion:state", currentPayload());
+  bubbleWindow.show();
+  bubbleWindow.focus();
+}
+
+function toggleChat() {
+  if (bubbleMode === "chat" && bubbleWindow?.isVisible()) hideBubble();
+  else showChat();
+}
+
 function dockedBounds(size, peek = false) {
   const work = currentWorkArea();
   const dock = companionSettings.dock;
@@ -686,6 +739,7 @@ function setExpanded(next) {
   clearTimeout(transitionFallback);
   window.setOpacity(0);
   expanded = next;
+  if (expanded) hideBubble();
   if (!next && collapsedRestoreBounds) {
     const restore = collapsedRestoreBounds;
     collapsedRestoreBounds = null;
@@ -713,8 +767,10 @@ function revealFromEdge() {
 
 function retreatToEdge() {
   clearTimeout(hideTimer);
-  if (!companionSettings.dock || expanded) return;
-  hideTimer = setTimeout(() => placeWindow({ peek: true }), 520);
+  if (!companionSettings.dock || expanded || bubbleMode === "chat") return;
+  hideTimer = setTimeout(() => {
+    if (bubbleMode !== "chat") placeWindow({ peek: true });
+  }, 520);
 }
 
 function detectSnap() {
@@ -949,11 +1005,17 @@ function sync() {
   writeCompanionStatus("running");
   superviseAgentBridges();
   const payload = currentPayload();
+  const notification = bubbleMessage(previousBubblePayload, payload);
+  previousBubblePayload = payload;
   const serialized = JSON.stringify(payload);
   if (serialized !== lastPayload) {
     lastPayload = serialized;
     window.webContents.send("companion:state", payload);
+    if (bubbleWindow && !bubbleWindow.isDestroyed() && !bubbleWindow.webContents.isLoading()) {
+      bubbleWindow.webContents.send("companion:state", payload);
+    }
   }
+  if (notification) showBubble(notification);
   agentConnectionServer?.refreshContexts();
   if (!window.isVisible()) window.showInactive();
 }
@@ -983,6 +1045,7 @@ function setAlwaysOnTop(enabled) {
   companionSettings = { ...companionSettings, always_on_top: Boolean(enabled) };
   writeSettings();
   if (window && !window.isDestroyed()) window.setAlwaysOnTop(Boolean(enabled), "floating");
+  if (bubbleWindow && !bubbleWindow.isDestroyed()) bubbleWindow.setAlwaysOnTop(Boolean(enabled), "floating");
   if (window && !window.isDestroyed()) window.webContents.send("companion:always-on-top", getAlwaysOnTop());
   if (tray) refreshTrayMenu();
   return getAlwaysOnTop();
@@ -990,7 +1053,9 @@ function setAlwaysOnTop(enabled) {
 
 function refreshTrayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "诊断当前仓库", click: () => { void requestWuxingDiagnostic().catch(() => {}); window.showInactive(); setExpanded(true); } },
+    { label: "和 Agent 聊天", click: () => { window.showInactive(); revealFromEdge(); showChat(); } },
+    { label: "打开成就任务", click: () => { hideBubble(); window.showInactive(); revealFromEdge(); setExpanded(true); } },
+    { label: "诊断当前仓库", click: () => { void requestWuxingDiagnostic().catch(() => {}); window.showInactive(); revealFromEdge(); showChat(); } },
     { label: "显示桌面伙伴", click: () => { window.showInactive(); revealFromEdge(); } },
     { label: "打开成就目录", click: () => shell.openPath(DATA_HOME) },
     { label: "窗口置顶", type: "checkbox", checked: getAlwaysOnTop(), click: (item) => setAlwaysOnTop(item.checked) },
@@ -1017,6 +1082,7 @@ function createWindow() {
   window.setAlwaysOnTop(getAlwaysOnTop(), "floating");
   window.loadFile(path.join(__dirname, "index.html"));
   window.webContents.on("did-finish-load", () => { lastPayload = ""; sync(); });
+  window.on("move", () => { if (bubbleWindow?.isVisible()) placeBubble(); });
   window.on("moved", detectSnap);
   window.on("close", (event) => {
     if (!quitting) {
@@ -1027,6 +1093,28 @@ function createWindow() {
     }
   });
   placeWindow({ peek: Boolean(companionSettings.dock) });
+}
+
+function createBubbleWindow() {
+  bubbleWindow = new BrowserWindow({
+    ...BUBBLE_SIZE,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    focusable: true,
+    alwaysOnTop: getAlwaysOnTop(),
+    skipTaskbar: true,
+    hasShadow: false,
+    webPreferences: { preload: path.join(__dirname, "bubble-preload.cjs"), contextIsolation: true, nodeIntegration: false }
+  });
+  bubbleWindow.setAlwaysOnTop(getAlwaysOnTop(), "floating");
+  bubbleWindow.loadFile(path.join(__dirname, "bubble.html"));
+  bubbleWindow.webContents.on("did-finish-load", () => {
+    bubbleWindow.webContents.send("companion:state", currentPayload());
+  });
 }
 
 function createTray() {
@@ -1046,18 +1134,29 @@ if (!hasSingleInstanceLock) {
     ensureCompanionData();
     ensureInitialDiagnostic();
     ensureAutostartOnFirstLaunch();
-    agentConnectionServer = createAgentConnectionServer({ dataHome: DATA_HOME, getContext: connectionContext, onChanged: () => { lastPayload = ""; sync(); } });
+    agentConnectionServer = createAgentConnectionServer({
+      dataHome: DATA_HOME,
+      getContext: connectionContext,
+      onChanged: () => { lastPayload = ""; sync(); },
+      onAssistantPrompt: ({ workspace, text }) => codexAcpClient.runPrompt(workspace, text)
+    });
     await agentConnectionServer.start();
     codexAcpClient = createCodexAcpClient({ dataHome: DATA_HOME, onChanged: () => { lastPayload = ""; sync(); } });
+    const initialFocus = focusedSession();
+    if (initialFocus?.workspace) codexAcpClient.connect(initialFocus.workspace).catch(() => { lastPayload = ""; sync(); });
     createWindow();
+    createBubbleWindow();
     createTray();
-    ipcMain.on("companion:toggle", () => setExpanded(!expanded));
+    ipcMain.on("companion:toggle", toggleChat);
+    ipcMain.on("companion:open-achievements", () => { hideBubble(); setExpanded(true); });
     ipcMain.on("companion:collapse", () => { setExpanded(false); retreatToEdge(); });
     ipcMain.on("companion:hover", (_event, hovering) => hovering ? revealFromEdge() : retreatToEdge());
     ipcMain.on("companion:drag-prepare", preparePetDrag);
     ipcMain.on("companion:drag-move", movePetDrag);
     ipcMain.on("companion:drag-end", (_event, commit) => finishPetDrag(Boolean(commit)));
     ipcMain.on("companion:transition-ready", finishWindowTransition);
+    ipcMain.on("companion:bubble-open", showChat);
+    ipcMain.on("companion:bubble-dismiss", hideBubble);
     ipcMain.handle("companion:choose-avatar", async () => {
       const result = await dialog.showOpenDialog(window, { title: "选择伙伴形象", properties: ["openFile"], filters: [{ name: "图片", extensions: AVATAR_EXTENSIONS }] });
       if (!result.canceled && result.filePaths[0]) installAvatar(result.filePaths[0]);
@@ -1077,11 +1176,11 @@ if (!hasSingleInstanceLock) {
     ipcMain.handle("companion:request-achievement-diagnostic", () => requestAchievementDiagnostic());
     ipcMain.handle("companion:confirm-diagnostic-discovery", (_event, requestId, discoveryId) => confirmDiagnosticDiscovery(requestId, discoveryId));
     ipcMain.handle("companion:review-claim", (_event, claimId, decision, feedback) => reviewClaim(claimId, decision, feedback));
-    screen.on("display-metrics-changed", () => placeWindow({ peek: Boolean(companionSettings.dock) && !expanded }));
+    screen.on("display-metrics-changed", () => { placeWindow({ peek: Boolean(companionSettings.dock) && !expanded }); if (bubbleWindow?.isVisible()) placeBubble(); });
     setInterval(sync, 1000).unref();
     sync();
   });
-  app.on("second-instance", () => { if (window) { window.showInactive(); setExpanded(true); } });
+  app.on("second-instance", () => { if (window) { window.showInactive(); revealFromEdge(); showChat(); } });
   app.on("before-quit", () => { quitting = true; codexAcpClient?.stop(); agentConnectionServer?.stop(); writeCompanionStatus("stopped", true); });
   app.on("window-all-closed", (event) => event.preventDefault());
 }

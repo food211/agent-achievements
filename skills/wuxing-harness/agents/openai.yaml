@@ -1,6 +1,6 @@
 interface:
   display_name: "五行 Harness"
-  short_description: "带着你逐条修改或退役已经失效的 Agent 规则"
-  default_prompt: "使用 $wuxing-harness 诊断当前仓库。先扫描实际生效的规则并给出证据，再一次只带我处理一条陈旧规则；不要把问题丢给我从零回答。"
+  short_description: "迭代旧规则，把 AI 协作痛点沉淀成新规则"
+  default_prompt: "使用 $wuxing-harness 诊断当前仓库。先让我选择：迭代已有规则，或从 AI 协作痛点沉淀新规则；选定后建立任务追踪并开始对应流程。当前入口完成后，再询问是否进入另一个。"
 policy:
   allow_implicit_invocation: true

@@ -115,6 +115,12 @@ Start the desktop companion:
 npm run companion
 ```
 
+The companion keeps one durable Codex session per repository and resumes the same context after restart. Another local Code Agent thread can submit a message to that repository's companion session through the token-authenticated loopback endpoint; the reply stays in the pet chat bubble instead of entering the sender's thread:
+
+```powershell
+node apps/companion/scripts/send-message.mjs --workspace <repository-path> --message <message>
+```
+
 Ask the current Coding Agent to adapt itself. This is the only setup request the user needs to make:
 
 ```text

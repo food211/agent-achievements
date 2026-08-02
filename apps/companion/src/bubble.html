@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>五行助手消息</title>
+    <link rel="stylesheet" href="bubble.css" />
+  </head>
+  <body>
+    <button class="notification surface" id="notification" type="button" aria-label="打开与 Agent 的对话">
+      <span class="mark" id="mark" aria-hidden="true">水</span>
+      <span class="copy"><b id="title">五行助手</b><small id="body">有一条新消息</small></span>
+      <span class="arrow" aria-hidden="true">›</span>
+    </button>
+    <section class="chat surface" id="chat" hidden>
+      <header><div><small id="workspace">当前仓库</small><b>和助手聊聊</b></div><button id="close" type="button" aria-label="收起聊天气泡">×</button></header>
+      <div class="messages" id="messages" aria-live="polite"></div>
+      <small class="activity" id="activity"></small>
+      <form id="form"><textarea id="input" maxlength="8000" placeholder="给当前仓库的 Agent 发消息"></textarea><button type="submit" aria-label="按回车发送" title="回车发送">↵</button></form>
+    </section>
+    <script src="bubble.js"></script>
+  </body>
+</html>

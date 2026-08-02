@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("agentCompanion", {
   toggle: () => ipcRenderer.send("companion:toggle"),
+  openAchievements: () => ipcRenderer.send("companion:open-achievements"),
   collapse: () => ipcRenderer.send("companion:collapse"),
   chooseAvatar: () => ipcRenderer.invoke("companion:choose-avatar"),
   resetAvatar: () => ipcRenderer.invoke("companion:reset-avatar"),

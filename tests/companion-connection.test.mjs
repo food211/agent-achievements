@@ -125,6 +125,33 @@ test("the local server drops an unauthenticated oversized buffer", async (t) => 
   assert.equal(server.sessions().length, 0);
 });
 
+test("another local Code Agent can send a message to the companion-owned session", async (t) => {
+  const dataHome = await mkdtemp(path.join(os.tmpdir(), "companion-assistant-client-"));
+  const received = [];
+  const server = createAgentConnectionServer({
+    dataHome,
+    getContext: () => ({}),
+    onAssistantPrompt: async (request) => {
+      received.push(request);
+      return { status: "delivered", session_id: "assistant-session-1" };
+    }
+  });
+  t.after(() => server.stop());
+  const endpoint = await server.start();
+  const client = connect(endpoint);
+  await once(client, "connect");
+  const nextLine = lines(client);
+  client.write(`${JSON.stringify({ type: "assistant_client", schema_version: "agent-achievements/v1", token: endpoint.token, client_id: "other-thread" })}\n`);
+  assert.equal((await nextLine()).type, "assistant_welcome");
+  client.write(`${JSON.stringify({ type: "assistant_prompt", schema_version: "agent-achievements/v1", request_id: "request-1", workspace: process.cwd(), text: "请检查这条规则" })}\n`);
+  const ack = await nextLine();
+  assert.equal(ack.status, "accepted");
+  assert.equal(ack.session_id, "assistant-session-1");
+  assert.equal(received[0].text, "请检查这条规则");
+  assert.equal(server.sessions().length, 0, "one-shot assistant clients must not appear as active Agent sessions");
+  client.end();
+});
+
 test("the portable Agent bridge authenticates and persists pushed context without model heartbeats", async (t) => {
   const dataHome = await mkdtemp(path.join(os.tmpdir(), "companion-bridge-e2e-"));
   const server = createAgentConnectionServer({

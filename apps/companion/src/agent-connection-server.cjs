@@ -164,6 +164,53 @@ function createAgentConnectionServer(options) {
     notifyChanged();
   }
 
+  function authenticateAssistantClient(socket, message) {
+    if (message?.type !== "assistant_client"
+      || message.schema_version !== VERSION
+      || !safeTokenEqual(token, message.token)
+      || typeof message.client_id !== "string"
+      || !message.client_id.trim()
+      || message.client_id.length > 128) return false;
+    socket.assistantClient = true;
+    send(socket, { type: "assistant_welcome", schema_version: VERSION, observed_at: new Date(now()).toISOString() });
+    return true;
+  }
+
+  function handleAssistantClient(socket, message) {
+    if (message?.type !== "assistant_prompt" || message.schema_version !== VERSION) return;
+    const requestId = String(message.request_id || "").trim().slice(0, 128);
+    const text = String(message.text || "").trim();
+    const workspace = typeof message.workspace === "string" && message.workspace.trim()
+      ? path.resolve(message.workspace.trim())
+      : "";
+    if (!requestId || !workspace || !text || text.length > 8_000) {
+      send(socket, { type: "assistant_prompt_ack", schema_version: VERSION, request_id: requestId, status: "failed", detail: "invalid-assistant-prompt" });
+      return;
+    }
+    if (socket.assistantPromptRunning) {
+      send(socket, { type: "assistant_prompt_ack", schema_version: VERSION, request_id: requestId, status: "failed", detail: "assistant-client-busy" });
+      return;
+    }
+    socket.assistantPromptRunning = true;
+    Promise.resolve(options.onAssistantPrompt?.({ workspace, text, requestId }))
+      .then((delivery) => send(socket, {
+        type: "assistant_prompt_ack",
+        schema_version: VERSION,
+        request_id: requestId,
+        status: "accepted",
+        workspace,
+        ...(delivery?.session_id ? { session_id: delivery.session_id } : {})
+      }))
+      .catch((error) => send(socket, {
+        type: "assistant_prompt_ack",
+        schema_version: VERSION,
+        request_id: requestId,
+        status: "failed",
+        detail: String(error?.message || error || "assistant-prompt-failed").slice(0, 600)
+      }))
+      .finally(() => { socket.assistantPromptRunning = false; });
+  }
+
   function handleSocket(socket) {
     socket.setNoDelay(true);
     socket.setTimeout(CONNECTION_TTL_MS);
@@ -184,9 +231,16 @@ function createAgentConnectionServer(options) {
         try { message = JSON.parse(line); }
         catch { socket.destroy(); return; }
         if (!authenticated) {
+          if (message?.type === "assistant_client") {
+            if (!authenticateAssistantClient(socket, message)) { socket.destroy(); return; }
+            authenticated = true;
+            continue;
+          }
           const connection = authenticate(socket, message);
           if (!connection) return;
           authenticated = true;
+        } else if (socket.assistantClient) {
+          handleAssistantClient(socket, message);
         } else {
           const connection = connections.get(socket.connectionKey);
           if (!connection) { socket.destroy(); return; }

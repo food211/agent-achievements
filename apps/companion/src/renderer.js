@@ -1,4 +1,6 @@
 const pet = document.getElementById("pet");
+const petStage = document.getElementById("petStage");
+const openAchievements = document.getElementById("openAchievements");
 const statusDot = pet.querySelector(".status-dot");
 const panel = document.getElementById("panel");
 const close = document.getElementById("close");
@@ -174,7 +176,7 @@ function render(payload) {
   pet.classList.toggle("online", isActive);
   pet.classList.toggle("idle", isIdle);
   const statusText = isActive ? "Agent 正在工作" : isIdle ? "Agent 正在等待" : "Agent 离线";
-  pet.title = `${statusText} · 点击展开助手`;
+  pet.title = `${statusText} · 点击和 Agent 聊天`;
   statusDot.title = statusText;
   statusDot.setAttribute("aria-label", statusText);
   customAvatar.hidden = !payload.avatar?.dataUrl;
@@ -190,7 +192,7 @@ function render(payload) {
     agentReplyForm.querySelector("button").disabled = busy;
     const messages = [...(conversation.messages || [])];
     if (conversation.status === "streaming" && conversation.output) messages.push({ role: "assistant", text: conversation.output, live: true });
-    agentMessages.innerHTML = messages.map((item) => `<article class="${item.role === "user" ? "from-user" : "from-agent"}${item.live ? " live" : ""}"><small>${item.role === "user" ? "你" : "诊断 Agent"}</small><p>${escapeHtml(item.text)}</p></article>`).join("");
+    agentMessages.innerHTML = messages.map((item) => `<article class="${item.role === "user" ? "from-user" : "from-agent"}${item.live ? " live" : ""}"><small>${item.role === "user" ? "你" : "当前 Agent"}</small><p>${escapeHtml(item.text)}</p></article>`).join("");
     agentMessages.scrollTop = agentMessages.scrollHeight;
   }
   latestCatalog = payload.catalog;
@@ -304,8 +306,12 @@ pet.addEventListener("keydown", (event) => {
   event.preventDefault();
   window.agentCompanion.toggle();
 });
-pet.addEventListener("mouseenter", () => window.agentCompanion.hover(true));
-pet.addEventListener("mouseleave", () => window.agentCompanion.hover(false));
+petStage.addEventListener("mouseenter", () => window.agentCompanion.hover(true));
+petStage.addEventListener("mouseleave", () => window.agentCompanion.hover(false));
+openAchievements.addEventListener("click", (event) => {
+  event.stopPropagation();
+  window.agentCompanion.openAchievements();
+});
 panel.addEventListener("mouseenter", () => window.agentCompanion.hover(true));
 panel.addEventListener("mouseleave", () => window.agentCompanion.hover(false));
 close.addEventListener("click", () => window.agentCompanion.collapse());
@@ -543,7 +549,7 @@ achievementForm.addEventListener("submit", async (event) => {
 });
 window.agentCompanion.onState(render);
 window.agentCompanion.onExpanded((expanded) => {
-  pet.hidden = expanded;
+  petStage.hidden = expanded;
   panel.classList.toggle("visible", expanded);
   panel.setAttribute("aria-hidden", String(!expanded));
   requestAnimationFrame(() => requestAnimationFrame(() => window.agentCompanion.transitionReady()));
