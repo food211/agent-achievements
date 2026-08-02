@@ -14,9 +14,9 @@ description: Proactively audit accumulated workspace rules by scanning active Sk
 成就系统 `bootstrap` 返回 `run_wuxing_diagnostic` 时，当前安装 Agent 启动或恢复一次分阶段诊断，不要求用户再说“开始”。完整遵循 [references/coaching-flow.md](references/coaching-flow.md)：
 
 1. 初始化当前工作区的 Harness 状态。
-2. 调用 `coach-start` 或 `coach-status` 取得当前步骤，先完成其中的 `prework`。扫描规则源、代码、测试、Git 历史和判断数据库，把候选项、路径和证据写入 `coach-observe`。
-3. 先向用户展示 `prepared_context`，再只问当前 `prompt`。让用户确认、纠正、排除或选择优先项；不得让用户从零回答 Agent 已能扫描到的事实，也不得提前跳到技术实现。
-4. 依次完成“开发创作者 → 技术判据 → 边界”三段，再结合代码证据形成待判断项或继续观察项。
+2. 调用 `coach-start` 或 `coach-status` 取得当前步骤。第一步 `creator_inventory` 必须先扫描规则源，把名称、路径、用途和证据写入 `coach-observe`，向用户展示 `prepared_context` 后再问；保留 Agent 先扫规则、用户只确认纠错的入口。
+3. 第一问之后切换为教练访谈：每轮只问当前 `prompt`，不再先生成候选答案。回答含糊时以 `needs_followup` 保存，停留在当前步骤追一个具体实例；未完成当前段，不得提前跳到实现或下一段。
+4. 严格依次完成“开发创作者 → 技术判据 → 边界”三段。技术段先把“什么该留给人”问透，再谈续跑、规则沉淀、规则推翻和指标；最后结合代码证据形成待判断项或继续观察项。
 5. 涉及产品判断、高影响数据或自动化边界的内容只挂起这一项；其他独立任务继续运行。
 
 首次五行诊断检查“当前规则是否健康”。它和成就系统的首次成果回顾是两个动作：不要用旧成就替代规则诊断，也不要把尚未修复的规则问题算作成果。
@@ -86,7 +86,7 @@ node <skill-path>/scripts/harness-cli.mjs decide --finding <id> --decision appro
 node <skill-path>/scripts/harness-cli.mjs applied --finding <id> --input <application.json>
 ```
 
-`observation.json` 遵守 [references/coaching-observation.schema.json](references/coaching-observation.schema.json)，保存 Agent 在提问前找到的候选和证据。`answer.json` 包含当前 `step_id`、用户原话 `answer`，以及 `quality: concrete|needs_followup`；用户确认一份有证据的候选清单也属于 `concrete`，不要求重新讲一个实例。访谈指针保存在 `.wuxing-harness/state.json`；预调查、逐步回答、Agent 遇到的问题和用户决策保存在 `.wuxing-harness/harness.db`。问题与决策的字段和记录时机见 [references/coaching-flow.md](references/coaching-flow.md)。脚本不自行修改规则文件。成就申请始终晚于人的批准和实际验证，不能反过来驱动审查结论。
+`observation.json` 遵守 [references/coaching-observation.schema.json](references/coaching-observation.schema.json)，用于保存第一问扫描到的规则清单和证据。`answer.json` 包含当前 `step_id`、用户原话 `answer`，以及 `quality: concrete|needs_followup`；用户确认第一问的清单属于 `concrete`，后续问题则必须落到具体规则、事件、动作或结果。访谈指针保存在 `.wuxing-harness/state.json`；规则清单、逐步回答、Agent 遇到的问题和用户决策保存在 `.wuxing-harness/harness.db`。问题与决策的字段和记录时机见 [references/coaching-flow.md](references/coaching-flow.md)。脚本不自行修改规则文件。成就申请始终晚于人的批准和实际验证，不能反过来驱动审查结论。
 
 ## 给人的输出
 
