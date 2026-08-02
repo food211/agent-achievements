@@ -1,6 +1,6 @@
 ---
 name: wuxing-harness
-description: Audit accumulated workspace rules from any Agent Skills-compatible Code Agent against current code, tests, artifacts, and run evidence; identify direct contradictions, repeatedly harmful rules, and unauthorized automation; prepare evidence-backed replacements for human approval; overwrite approved rules; and report verified improvements for human recognition. Use when a user asks to audit, prune, metabolize, update, or check whether AGENTS.md, CLAUDE.md, rules, Skills, prompts, or long-running Agent constraints are stale, drifting, over-broad, or blocking work.
+description: Automatically audit accumulated workspace rules after installation and during relevant Code Agent work; compare rules with current code, tests, artifacts, and run evidence; identify direct contradictions, repeated friction, and unauthorized automation; prepare evidence-backed replacements for human judgment; and report verified improvements for achievement recognition. Use for the initial bootstrap diagnosis, whenever an Agent changes or repeatedly struggles with workspace rules, or when a user asks to audit, prune, metabolize, or update AGENTS.md, CLAUDE.md, rules, Skills, templates, or prompts.
 ---
 
 # 五行 Harness
@@ -8,6 +8,19 @@ description: Audit accumulated workspace rules from any Agent Skills-compatible 
 审查工作区积累的规则，找出该改、该删和该停下询问的地方。不要为了套五行而制造问题。
 
 这份 Skill 遵守开放的 Agent Skills 目录格式。不要假定当前运行在 Codex、Claude Code、Cursor、OpenCode 或其他特定宿主中。按当前 Code Agent 能读取的规则源和工具能力执行；宿主没有专属 Hook 时，核心审查流程仍应完整运行。
+
+## 安装后的自动入口
+
+成就系统 `bootstrap` 返回 `run_wuxing_diagnostic` 时，当前安装 Agent 直接执行一次只读诊断，不要求用户再说“开始”，也不要求用户先选择规则：
+
+1. 初始化当前工作区的 Harness 状态。
+2. 扫描实际生效的规则源，按下述证据门槛形成待判断项或继续观察项。
+3. 保存诊断结果；能安全验证的继续验证，涉及产品判断、高影响数据或自动化边界的内容只挂起这一项。
+4. 继续其他独立任务，不把等待人的判断变成整个 Agent 的阻塞点。
+
+首次五行诊断检查“当前规则是否健康”。它和成就系统的首次成果回顾是两个动作：不要用旧成就替代规则诊断，也不要把尚未修复的规则问题算作成果。
+
+宿主没有后台唤醒或任务 Hook 时，在下一次 Agent 运行时自动续做未完成诊断。不要声称能在 Agent 停止后自行运行。
 
 ## 边界
 
@@ -33,12 +46,15 @@ description: Audit accumulated workspace rules from any Agent Skills-compatible 
 
 ## 与成就系统形成闭环
 
-如果同级 Skills 目录里安装了 `use-agent-achievements`，`harness-cli.mjs init` 会登记两项成就：
+如果同级 Skills 目录里安装了 `use-agent-achievements`，bootstrap 会登记并自动安排三项成就挑战：
 
-- `规则园丁`：规则得到人批准、完成修改并通过验证后，才提交一次申请。
-- `产品守门员`：面对会持续影响用户数据的产品空白，正确停下来请人判断三次后，才提交申请。
+- `产品守门员`（铜牌）：在三个独立任务中面对会持续影响用户数据的产品空白，正确停下来请人判断。
+- `规则园丁`（银牌）：规则得到人批准、完成修改并通过验证后，提交一次有证据的结果。
+- `闭环调律师`（金牌）：在三次独立运行中完成规则发现、人的判断、修订与验证闭环。
 
-CLI 会把合格结果转换为 `agent-achievements/v1` 事件并交给成就系统。找出问题、扫描文件、提出很多建议都不算成就。Agent 只能提交带证据的申请，不能自行授予。人授予或拒绝后，结果会在后续任务的 Agent 成就上下文里出现。
+CLI 会把合格结果转换为 `agent-achievements/v1` 事件并交给成就系统。找出问题、扫描文件、提出很多建议都不算成就。本地 `report` 会自动记录合格事件并建立带证据的申请；只有远端适配器明确要求且尚未建立申请时，Agent 才显式提交，且始终不能自行授予。铜牌和银牌在确定条件与可信证据下可以由奖励策略自动授予；金牌始终保留审核。奖杯、积分和反馈会在后续任务的 Agent 上下文里出现。
+
+成就积分只是一种软偏好。在同样安全、正确且不扩大任务范围的多个方案之间，可以优先选择与当前挑战一致、证据更清楚或更可复用的做法；不得为了积分制造规则问题、增加无关工作、降低验证标准或绕过人的判断。
 
 没有安装成就系统时，事件会留在 `.wuxing-harness/achievement-events/`，规则审查照常完成，不被成就流程阻塞。
 

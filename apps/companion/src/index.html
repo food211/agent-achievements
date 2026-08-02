@@ -27,14 +27,24 @@
       <div class="achievement-head">
         <div><small>ACHIEVEMENT COLLECTION</small><b>成就图鉴</b><span><i id="collectionCount">0 项成就</i> · <i id="totalScore">0 积分</i></span></div>
       </div>
+      <section class="autopilot-card no-drag" id="autopilotCard">
+        <div class="autopilot-head"><span id="autopilotStatus">自动运行</span><div><small>当前等级</small><b id="agentLevel">见微</b></div><em id="scoreEffect">积分正在调整推荐挑战</em></div>
+        <p class="behavior-hint" id="behaviorHint">助手会为当前 Agent 准备合适的下一项挑战。</p>
+        <div class="challenge-row">
+          <article><small>当前挑战</small><b id="currentChallenge">正在准备</b><p id="currentChallengeHint"></p><span class="bar"><i id="currentChallengeProgress"></i></span><em id="currentChallengeCount"></em></article>
+          <article><small>下一挑战</small><b id="nextChallenge">等待安排</b><p id="nextChallengeHint"></p></article>
+        </div>
+        <details class="challenge-boundaries"><summary>这次挑战的边界</summary><ul id="challengeBoundaries"></ul><p id="operatingPriority"></p></details>
+      </section>
       <section class="diagnostic-card no-drag" id="diagnosticCard">
         <div class="diagnostic-mark">✦</div>
-        <div><small>FIRST ACHIEVEMENT SETTLEMENT</small><b>翻翻以前做成的事</b><p id="diagnosticSummary">让 Agent 看看以前留下的成果，有结果的才记下来。</p></div>
-        <button id="requestDiagnostic">开始回顾</button>
+        <div><small>AUTOMATIC WUXING DIAGNOSIS</small><b>五行诊断正在跟随 Agent</b><p id="diagnosticSummary">安装后会自动回顾已有成果，有证据的才记下来。</p></div>
+        <button id="requestDiagnostic">重新回顾</button>
         <div class="diagnostic-discoveries" id="diagnosticDiscoveries"></div>
       </section>
       <div class="catalog-tabs no-drag" id="catalogTabs">
-        <button class="selected" data-origin="system_discovered">系统发现 <span id="systemCount">0</span></button>
+        <button class="selected" data-origin="system_suggested">五行任务 <span id="suggestedCount">0</span></button>
+        <button data-origin="system_discovered">已经做到 <span id="systemCount">0</span></button>
         <button data-origin="human_created">我的成就 <span id="humanCount">0</span></button>
       </div>
       <div id="catalog" class="catalog"></div>
@@ -43,10 +53,13 @@
         <span><b>主动追踪</b><small>最多 3 项，Agent 做事时会看到你的鼓励</small></span>
       </div>
       <div id="tracked" class="cards"></div>
-      <div class="section-title"><span>最近获得</span><small>人的认可</small></div>
+      <div class="section-title"><span>已经完成</span><small>Agent 自动记录</small></div>
+      <div id="completedTasks" class="cards completed-tasks"></div>
+      <div class="section-title"><span>最近获得</span><small>系统结算与人的认可</small></div>
       <div id="awards" class="cards"></div>
       <div class="section-title"><span>等待认可</span><small>Agent 提交的证据</small></div>
       <div id="pendingClaims" class="cards pending-claims"></div>
+      <p id="claimMessage" class="claim-message" role="status"></p>
       <details class="companion-settings no-drag">
         <summary>桌面伙伴设置</summary>
         <div class="appearance">

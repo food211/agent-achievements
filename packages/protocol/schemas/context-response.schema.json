@@ -55,6 +55,140 @@
         }
       }
     },
+    "motivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_points", "level", "recommended_challenge_tier", "encouragement_tone", "message", "score_effect"],
+      "properties": {
+        "total_points": { "type": "integer", "minimum": 0 },
+        "level": { "enum": ["starter", "growing", "seasoned"] },
+        "recommended_challenge_tier": { "enum": ["bronze", "silver", "gold"] },
+        "encouragement_tone": { "enum": ["gentle", "steady", "mastery"] },
+        "message": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "score_effect": { "const": "challenge_difficulty_and_encouragement_only" }
+      }
+    },
+    "active_challenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["achievement_id", "title", "tier", "points", "progress", "behavior_prompt", "relevance_reason", "guardrails"],
+      "properties": {
+        "achievement_id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "tier": { "enum": ["bronze", "silver", "gold"] },
+        "points": { "enum": [10, 30, 100] },
+        "progress": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["current", "target", "unit"],
+          "properties": {
+            "current": { "type": "integer", "minimum": 0 },
+            "target": { "type": "integer", "minimum": 1 },
+            "unit": { "enum": ["events", "qualified_tasks", "distinct_runs"] }
+          }
+        },
+        "behavior_prompt": { "type": "string", "maxLength": 400 },
+        "relevance_reason": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "guardrails": { "type": "array", "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": 200 } }
+      }
+    },
+    "next_challenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["achievement_id", "title", "tier", "points", "progress", "behavior_prompt", "relevance_reason", "guardrails"],
+      "properties": {
+        "achievement_id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "tier": { "enum": ["bronze", "silver", "gold"] },
+        "points": { "enum": [10, 30, 100] },
+        "progress": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["current", "target", "unit"],
+          "properties": {
+            "current": { "type": "integer", "minimum": 0 },
+            "target": { "type": "integer", "minimum": 1 },
+            "unit": { "enum": ["events", "qualified_tasks", "distinct_runs"] }
+          }
+        },
+        "behavior_prompt": { "type": "string", "maxLength": 400 },
+        "relevance_reason": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "guardrails": { "type": "array", "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": 200 } }
+      }
+    },
+    "agent_actions": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action_id", "action", "status", "reason", "instructions", "guardrails"],
+        "properties": {
+          "action_id": { "type": "string", "minLength": 2, "maxLength": 128 },
+          "action": { "enum": ["ensure_companion_running", "ensure_agent_bridge", "run_wuxing_diagnostic", "diagnose_past_achievements"] },
+          "status": { "const": "pending" },
+          "reason": { "enum": ["first_install", "skills_changed", "manual"] },
+          "instructions": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "guardrails": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": 200 } },
+          "request_id": { "type": "string", "maxLength": 128 },
+          "workspace": { "type": "string", "maxLength": 1000 },
+          "command": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["program", "args", "cwd"],
+            "properties": {
+              "program": { "type": "string", "minLength": 1, "maxLength": 1000 },
+              "args": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "maxLength": 1000 } },
+              "cwd": { "type": "string", "minLength": 1, "maxLength": 1000 }
+            }
+          },
+          "bridge_command": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["program", "args", "cwd"],
+            "properties": {
+              "program": { "type": "string", "minLength": 1, "maxLength": 1000 },
+              "args": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "maxLength": 1000 } },
+              "cwd": { "type": "string", "minLength": 1, "maxLength": 1000 }
+            }
+          },
+          "detection": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "path", "expected_status", "max_age_seconds"],
+            "properties": {
+              "type": { "const": "file_freshness" },
+              "path": { "type": "string", "minLength": 1, "maxLength": 1000 },
+              "expected_status": { "enum": ["running", "connected"] },
+              "max_age_seconds": { "type": "integer", "minimum": 5, "maximum": 300 },
+              "require_live_pid": { "type": "boolean" }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "action": { "const": "ensure_companion_running" } }, "required": ["action"] },
+            "then": {
+              "properties": {
+                "command": true,
+                "detection": { "type": "object", "properties": { "require_live_pid": { "const": true } }, "required": ["require_live_pid"] }
+              },
+              "required": ["command", "detection"]
+            }
+          },
+          {
+            "if": { "properties": { "action": { "const": "ensure_agent_bridge" } }, "required": ["action"] },
+            "then": {
+              "properties": {
+                "bridge_command": true,
+                "detection": { "type": "object", "properties": { "require_live_pid": { "const": true } }, "required": ["require_live_pid"] }
+              },
+              "required": ["bridge_command", "detection"]
+            }
+          }
+        ]
+      }
+    },
     "design_requests": {
       "type": "array",
       "maxItems": 3,
@@ -77,7 +211,8 @@
         "required": ["request_id", "reason"],
         "properties": {
           "request_id": { "type": "string" },
-          "reason": { "enum": ["first_run", "skills_changed", "manual"] }
+          "reason": { "enum": ["first_run", "skills_changed", "manual"] },
+          "scope": { "enum": ["past_achievements", "wuxing_rules"] }
         }
       }
     },

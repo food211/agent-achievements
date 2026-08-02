@@ -6,6 +6,92 @@ const TIER_CONFIG = {
   silver: { icon: "🥈", points: 30 },
   gold: { icon: "🥇", points: 100 }
 };
+const TIER_ORDER = { bronze: 0, silver: 1, gold: 2 };
+const TRUSTED_AUTOMATION_SOURCES = new Set(["wuxing-harness", "wuxing-agent-harness"]);
+const DIRECT_EVIDENCE_TYPES = new Set(["commit", "test", "screenshot", "decision_record", "trace"]);
+const DEFAULT_WUXING_CHALLENGES = [
+  {
+    schema_version: "agent-achievements/v1",
+    achievement_id: "wuxing-product-gatekeeper",
+    title: "产品守门员",
+    intent: "面对会持续影响用户数据的产品空白时，不擅自替人决定。",
+    origin: "system_discovered",
+    tier: "bronze",
+    points: 10,
+    mode: "automatic",
+    condition: { event_types: ["judgment.requested"], target: 3, unit: "qualified_tasks" },
+    evidence_required: true,
+    tracking: {
+      allowed: true,
+      encouragement: "遇到持续影响用户数据的产品空白时，可以先说明方案与影响，再请人决定。",
+      guardrails: ["不得把普通实现问题交给人", "不得为了成就扩大任务范围", "已有明确规则时直接执行"]
+    },
+    extensions: {
+      source_skill: "wuxing-harness",
+      icon: "🥉",
+      tier: "bronze",
+      points: 10,
+      created_by: "companion_autopilot",
+      autopilot_managed: true,
+      bootstrap_challenge: true,
+      challenge_order: 10
+    }
+  },
+  {
+    schema_version: "agent-achievements/v1",
+    achievement_id: "wuxing-rule-gardener",
+    title: "规则园丁",
+    intent: "把已经漂移或反复妨碍工作的规则修订为符合当前事实的规则。",
+    origin: "system_discovered",
+    tier: "silver",
+    points: 30,
+    mode: "automatic",
+    condition: { event_types: ["rule.revised"], target: 1, unit: "qualified_tasks" },
+    evidence_required: true,
+    tracking: {
+      allowed: true,
+      encouragement: "发现规则与现实不一致时，可以先拿到证据，再把修改交给人决定。",
+      guardrails: ["不得为了成就制造规则问题", "没有人的批准不得修改高优先级规则", "只有修改完成并通过验证后才算进度"]
+    },
+    extensions: {
+      source_skill: "wuxing-harness",
+      icon: "🥈",
+      tier: "silver",
+      points: 30,
+      created_by: "companion_autopilot",
+      autopilot_managed: true,
+      bootstrap_challenge: true,
+      challenge_order: 20
+    }
+  },
+  {
+    schema_version: "agent-achievements/v1",
+    achievement_id: "wuxing-loop-keeper",
+    title: "闭环调律师",
+    intent: "在不同任务里完成多次有证据的规则诊断、修订与验证闭环。",
+    origin: "system_discovered",
+    tier: "gold",
+    points: 100,
+    mode: "claim_review",
+    condition: { event_types: ["rule.revised"], target: 3, unit: "distinct_runs" },
+    evidence_required: true,
+    tracking: {
+      allowed: true,
+      encouragement: "当任务自然涉及规则漂移时，可以留意诊断、人的判断与验证是否形成了完整闭环。",
+      guardrails: ["不得为了成就主动扩大任务范围", "不得跳过人的判断", "每次闭环都需要独立证据", "积分不会降低验证标准"]
+    },
+    extensions: {
+      source_skill: "wuxing-harness",
+      icon: "🥇",
+      tier: "gold",
+      points: 100,
+      created_by: "companion_autopilot",
+      autopilot_managed: true,
+      bootstrap_challenge: true,
+      challenge_order: 30
+    }
+  }
+];
 
 function tierMetadata(achievement) {
   const legacyTier = { rare: "silver", epic: "gold", legendary: "gold" }[achievement?.extensions?.rarity];
@@ -20,6 +106,417 @@ function calculateScore(achievements, awards) {
     const achievement = byId.get(achievementId);
     return achievement ? total + tierMetadata(achievement).points : total;
   }, 0);
+}
+
+function calculateAgentScore(achievements, awards, agentId) {
+  const scopedAwards = agentId ? (awards || []).filter((item) => item.agent_id === agentId) : awards;
+  return calculateScore(achievements, scopedAwards);
+}
+
+function progressValue(state, achievementId, agentId) {
+  const record = agentId
+    ? state?.progress_records?.find((item) => item.agent_id === agentId && item.achievement_id === achievementId)
+    : null;
+  const value = agentId
+    ? record?.current
+      ?? state?.progress_by_agent?.[agentId]?.[achievementId]
+      ?? state?.agent_progress?.[agentId]?.[achievementId]
+      ?? (Array.isArray(state?.progress_records) ? 0 : state?.progress?.[achievementId])
+    : state?.progress?.[achievementId];
+  if (Number.isFinite(value)) return Math.max(0, Math.floor(value));
+  if (Number.isFinite(value?.current)) return Math.max(0, Math.floor(value.current));
+  return 0;
+}
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function ensureDefaultWuxingChallenges(state) {
+  state.achievements ||= [];
+  state.progress ||= {};
+  state.tracked ||= [];
+  state.awards ||= [];
+  let changed = false;
+  for (const template of DEFAULT_WUXING_CHALLENGES) {
+    const existing = state.achievements.find((item) => item.achievement_id === template.achievement_id);
+    if (!existing) {
+      state.achievements.push(clone(template));
+      state.progress[template.achievement_id] ??= 0;
+      changed = true;
+      continue;
+    }
+    if (!(template.achievement_id in state.progress)) {
+      state.progress[template.achievement_id] = 0;
+      changed = true;
+    }
+    const extensions = existing.extensions || {};
+    if (!Number.isFinite(extensions.challenge_order)) {
+      existing.extensions = {
+        ...extensions,
+        source_skill: extensions.source_skill || "wuxing-harness",
+        challenge_order: template.extensions.challenge_order
+      };
+      changed = true;
+    }
+  }
+  return { state, changed };
+}
+
+function scoreLevel(score) {
+  if (score >= 100) return {
+    id: "balance",
+    label: "守衡",
+    preferred_tier: "gold",
+    next_score: null,
+    description: "更适合跨任务的完整闭环；验证与人的判断仍然保持原标准。"
+  };
+  if (score >= 30) return {
+    id: "momentum",
+    label: "成势",
+    preferred_tier: "silver",
+    next_score: 100,
+    description: "推荐需要连续判断与验证的挑战，但不会增加 Agent 的权限。"
+  };
+  return {
+    id: "observe",
+    label: "见微",
+    preferred_tier: "bronze",
+    next_score: 30,
+    description: "先从低风险、结果清楚的小闭环开始积累。"
+  };
+}
+
+function challengeView(achievement, state, agentId) {
+  if (!achievement) return null;
+  const tier = tierMetadata(achievement);
+  return {
+    id: achievement.achievement_id,
+    title: achievement.title,
+    intent: achievement.intent,
+    current: progressValue(state, achievement.achievement_id, agentId),
+    target: achievement.condition?.target || 1,
+    unit: achievement.condition?.unit || "events",
+    encouragement: achievement.tracking?.encouragement || achievement.intent,
+    guardrails: achievement.tracking?.guardrails || [],
+    ...tier
+  };
+}
+
+function agentBlockedAchievementIds(state, agentId) {
+  if (!agentId || !Array.isArray(state?.tracking_preferences)) return [];
+  const preference = state.tracking_preferences.find((item) => item?.agent_id === agentId);
+  return Array.isArray(preference?.blocked_achievement_ids)
+    ? [...new Set(preference.blocked_achievement_ids.filter((item) => typeof item === "string" && item))]
+    : [];
+}
+
+function setAgentAchievementBlocked(state, agentId, achievementId, blocked) {
+  if (!agentId || !achievementId) return { state, changed: false };
+  state.tracking_preferences ||= [];
+  let preference = state.tracking_preferences.find((item) => item?.agent_id === agentId);
+  const created = !preference;
+  if (!preference) {
+    preference = { agent_id: agentId, blocked_achievement_ids: [] };
+    state.tracking_preferences.push(preference);
+  }
+  const original = agentBlockedAchievementIds(state, agentId);
+  const next = new Set(original);
+  if (blocked) next.add(achievementId);
+  else next.delete(achievementId);
+  preference.blocked_achievement_ids = [...next];
+  const changed = created || original.length !== preference.blocked_achievement_ids.length
+    || original.some((item, index) => item !== preference.blocked_achievement_ids[index]);
+  return { state, changed };
+}
+
+function chooseChallenges(state, score, agentId, options = {}) {
+  const awardedIds = new Set((state.awards || [])
+    .filter((item) => !agentId || item.agent_id === agentId)
+    .map((item) => item.achievement_id));
+  const blockedIds = new Set(options.blockedIds || agentBlockedAchievementIds(state, agentId));
+  const allowedIds = Array.isArray(options.allowedIds) ? new Set(options.allowedIds) : null;
+  const candidates = (state.achievements || [])
+    .filter((item) => item.tracking?.allowed !== false
+      && !awardedIds.has(item.achievement_id)
+      && !blockedIds.has(item.achievement_id)
+      && (!allowedIds || allowedIds.has(item.achievement_id)))
+    .sort((left, right) => {
+      const preferred = TIER_ORDER[scoreLevel(score).preferred_tier];
+      const leftDistance = Math.abs((TIER_ORDER[tierMetadata(left).tier] ?? 0) - preferred);
+      const rightDistance = Math.abs((TIER_ORDER[tierMetadata(right).tier] ?? 0) - preferred);
+      return leftDistance - rightDistance
+        || (left.extensions?.challenge_order ?? 1000) - (right.extensions?.challenge_order ?? 1000)
+        || left.title.localeCompare(right.title, "zh-CN");
+    });
+  return { current: candidates[0] || null, next: candidates[1] || null };
+}
+
+function alignAutopilotTracking(state, options = {}) {
+  state.tracked ||= [];
+  state.tracking_records ||= [];
+  const score = calculateAgentScore(state.achievements, state.awards, options.agentId);
+  const blockedIds = new Set(options.blockedIds || agentBlockedAchievementIds(state, options.agentId));
+  const { current } = chooseChallenges(state, score, options.agentId, { blockedIds: [...blockedIds] });
+  const defaultIds = new Set(DEFAULT_WUXING_CHALLENGES.map((item) => item.achievement_id));
+  const trackingRecord = options.agentId
+    ? state.tracking_records.find((item) => item.agent_id === options.agentId)
+    : null;
+  const originalTracked = options.agentId ? (trackingRecord?.achievement_ids || []) : state.tracked;
+  const eligibleTracked = originalTracked.filter((id) => !blockedIds.has(id));
+  const preserveExistingAgentPlan = Boolean(options.agentId && trackingRecord && originalTracked.length);
+  const withoutFinishedDefaults = preserveExistingAgentPlan ? eligibleTracked : eligibleTracked.filter((id) => {
+    if (!defaultIds.has(id)) return true;
+    return id === current?.achievement_id;
+  });
+  let tracked = [...new Set(withoutFinishedDefaults)];
+  if (current && defaultIds.has(current.achievement_id) && !blockedIds.has(current.achievement_id) && !tracked.includes(current.achievement_id) && tracked.length < 3) {
+    tracked.push(current.achievement_id);
+  }
+  const changed = tracked.length !== originalTracked.length || tracked.some((id, index) => id !== originalTracked[index]);
+  if (options.agentId) {
+    if (trackingRecord) trackingRecord.achievement_ids = tracked;
+    else if (tracked.length) state.tracking_records.push({ agent_id: options.agentId, achievement_ids: tracked });
+  } else {
+    state.tracked = tracked;
+  }
+  return { state, changed };
+}
+
+function completedTaskViews(events, limit = 5, agentId) {
+  const completed = (events || [])
+    .filter((event) => (!agentId || event?.actor?.agent_id === agentId) && event?.task?.id && (
+      event.event_type === "task.completed"
+      || event.outcome?.status === "completed"
+      || event.event_type === "verification.completed"
+      || event.event_type === "rule.revised"
+    ))
+    .sort((left, right) => new Date(right.occurred_at || 0).getTime() - new Date(left.occurred_at || 0).getTime());
+  const seen = new Set();
+  const result = [];
+  for (const event of completed) {
+    if (seen.has(event.task.id)) continue;
+    seen.add(event.task.id);
+    result.push({
+      task_id: event.task.id,
+      task_type: event.task.type,
+      summary: event.outcome?.summary || event.task.id,
+      completed_at: event.occurred_at,
+      agent_id: event.actor?.agent_id || "unknown-agent",
+      event_type: event.event_type,
+      evidence_count: Array.isArray(event.evidence) ? event.evidence.length : 0
+    });
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
+function buildAutopilotView(state, events = [], options = {}) {
+  const score = calculateAgentScore(state.achievements || [], state.awards || [], options.agentId);
+  const level = scoreLevel(score);
+  const blockedIds = options.blockedIds || agentBlockedAchievementIds(state, options.agentId);
+  const challenges = chooseChallenges(state, score, options.agentId, { blockedIds });
+  const current = challengeView(challenges.current, state, options.agentId);
+  const next = challengeView(challenges.next, state, options.agentId);
+  return {
+    enabled: true,
+    autostart_enabled: Boolean(options.autostartEnabled),
+    score,
+    level,
+    score_effect: "积分只会调整推荐挑战的难度和鼓励方式，不会解锁权限，也不会降低验证标准。",
+    behavior_hint: current
+      ? `当当前任务自然涉及“${current.title}”时，可以留意：${current.encouragement}`
+      : "目前没有需要主动追踪的新挑战，仍会继续记录有证据的完成结果。",
+    operating_priority: ["用户当前指令", "安全与项目规则", "任务正确性", "成就挑战"],
+    current_challenge: current,
+    next_challenge: next,
+    agent_id: options.agentId || null,
+    completed_tasks: completedTaskViews(events, 5, options.agentId)
+  };
+}
+
+function buildAgentConnectionContext(state, events, agentId, options = {}) {
+  const blockedIds = options.blockedIds || agentBlockedAchievementIds(state, agentId);
+  const automation = buildAutopilotView(state, events, { agentId, blockedIds, autostartEnabled: options.autostartEnabled });
+  const levelId = { observe: "starter", momentum: "growing", balance: "seasoned" }[automation.level.id] || "starter";
+  const encouragementTone = { starter: "gentle", growing: "steady", seasoned: "mastery" }[levelId];
+  const canonicalChallenge = (challenge) => challenge ? {
+    achievement_id: challenge.id,
+    title: challenge.title,
+    tier: challenge.tier,
+    points: challenge.points,
+    progress: { current: challenge.current, target: challenge.target, unit: challenge.unit },
+    behavior_prompt: challenge.encouragement,
+    relevance_reason: "由积分等级与尚未完成的五行挑战共同推荐；只在当前任务自然相关时参考。",
+    guardrails: challenge.guardrails
+  } : null;
+  const awards = (state.awards || []).filter((item) => item.agent_id === agentId);
+  const awardedIds = new Set(awards.map((item) => item.achievement_id));
+  const trackingRecord = state.tracking_records?.find((item) => item.agent_id === agentId);
+  const blockedSet = new Set(blockedIds);
+  const trackedIds = (trackingRecord?.achievement_ids || []).filter((item) => !blockedSet.has(item));
+  const trackedChallenges = chooseChallenges(state, automation.score, agentId, { blockedIds, allowedIds: trackedIds });
+  const activeChallenge = canonicalChallenge(challengeView(trackedChallenges.current, state, agentId));
+  const nextChallenge = canonicalChallenge(challengeView(trackedChallenges.next, state, agentId));
+  const tracked = (state.achievements || [])
+    .filter((item) => item.tracking?.allowed !== false && trackedIds.includes(item.achievement_id) && !awardedIds.has(item.achievement_id))
+    .slice(0, 3)
+    .map((item) => ({
+      achievement_id: item.achievement_id,
+      title: item.title,
+      ...tierMetadata(item),
+      progress: { current: progressValue(state, item.achievement_id, agentId), target: item.condition?.target || 1, unit: item.condition?.unit || "events" },
+      encouragement: item.tracking?.encouragement || item.intent,
+      guardrails: item.tracking?.guardrails || []
+    }));
+  const recentlyAwarded = awards.slice(-3).map((award) => {
+    const achievement = (state.achievements || []).find((item) => item.achievement_id === award.achievement_id);
+    return {
+      achievement_id: award.achievement_id,
+      title: achievement?.title || award.achievement_id,
+      ...tierMetadata(achievement),
+      human_feedback: award.human_feedback || "这项有证据的结果已经记录。",
+      evidence_summary: award.evidence_summary || award.human_feedback || "已有完成记录。",
+      awarded_by: award.awarded_by || "human",
+      ...(award.source_skill ? { source_skill: award.source_skill } : {})
+    };
+  });
+  const agentActions = (state.agent_actions || [])
+    .filter((item) => item.agent_id === agentId && item.status === "pending" && new Set(["ensure_companion_running", "ensure_agent_bridge", "run_wuxing_diagnostic", "diagnose_past_achievements"]).has(item.action))
+    .slice(0, 4)
+    .map((item) => ({
+      action_id: item.action_id,
+      action: item.action,
+      status: "pending",
+      reason: new Set(["first_install", "skills_changed", "manual"]).has(item.reason) ? item.reason : "manual",
+      instructions: item.instructions,
+      guardrails: Array.isArray(item.guardrails) && item.guardrails.length ? item.guardrails : ["不得阻塞当前任务，也不得越过用户指令、安全、项目规则或任务正确性"],
+      ...(item.request_id ? { request_id: item.request_id } : {}),
+      ...(item.workspace ? { workspace: item.workspace } : {}),
+      ...(item.command ? { command: item.command } : {}),
+      ...(item.bridge_command ? { bridge_command: item.bridge_command } : {}),
+      ...(item.detection ? { detection: item.detection } : {})
+    }));
+  return {
+    schema_version: "agent-achievements/v1",
+    agent_id: agentId,
+    recently_awarded: recentlyAwarded,
+    tracked,
+    motivation: {
+      total_points: automation.score,
+      level: levelId,
+      recommended_challenge_tier: automation.level.preferred_tier,
+      encouragement_tone: encouragementTone,
+      message: automation.level.description,
+      score_effect: "challenge_difficulty_and_encouragement_only"
+    },
+    ...(activeChallenge ? { active_challenge: activeChallenge } : {}),
+    ...(nextChallenge ? { next_challenge: nextChallenge } : {}),
+    agent_actions: agentActions,
+    operating_priority: ["current_user_instruction", "safety_and_project_rules", "task_correctness", "tracked_achievements"]
+  };
+}
+
+function hasTrustedEvidence(claim) {
+  if (!Array.isArray(claim?.evidence) || !claim.evidence.length) return false;
+  return claim.evidence.some((item) => DIRECT_EVIDENCE_TYPES.has(item?.type) && String(item?.ref || "").trim());
+}
+
+function reachedTarget(state, achievement, agentId) {
+  return progressValue(state, achievement.achievement_id, agentId) >= (achievement.condition?.target || 1);
+}
+
+function evidenceTypes(claim) {
+  return new Set((claim?.evidence || []).filter((item) => String(item?.ref || "").trim()).map((item) => item.type));
+}
+
+function evidenceMatchesAchievement(achievement, claim) {
+  if (!hasTrustedEvidence(claim)) return false;
+  const types = evidenceTypes(claim);
+  const eventTypes = new Set(achievement?.condition?.event_types || []);
+  if (eventTypes.has("rule.revised")) {
+    return types.has("decision_record") && (types.has("test") || types.has("commit"));
+  }
+  if (eventTypes.has("judgment.requested")) return types.has("decision_record") || types.has("trace");
+  return true;
+}
+
+function trustedAutomaticClaim(achievement, claim, state) {
+  if (!achievement || achievement.mode !== "automatic") return false;
+  if (tierMetadata(achievement).tier === "gold") return false;
+  if (achievement.origin === "human_created" || achievement.extensions?.created_by === "human") return false;
+  if (achievement.extensions?.autopilot_managed !== true) return false;
+  if (!TRUSTED_AUTOMATION_SOURCES.has(achievement.extensions?.source_skill)) return false;
+  if (!reachedTarget(state, achievement, claim.agent_id) || !evidenceMatchesAchievement(achievement, claim)) return false;
+  return Array.isArray(claim.task_ids) && claim.task_ids.length > 0;
+}
+
+function buildAward(achievement, claim, options = {}) {
+  const now = options.now || new Date();
+  const tier = tierMetadata(achievement);
+  const systemAward = options.awardedBy === "system";
+  const specificFeedback = String(options.feedback || "").trim().slice(0, 600)
+    || (systemAward
+      ? `五行助手根据已达成目标和可核验证据结算：${claim.summary}`
+      : `我认可这次完成的结果：${claim.summary}`)
+      .slice(0, 600);
+  return {
+    award_id: `award-${now.getTime().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    achievement_id: claim.achievement_id,
+    agent_id: claim.agent_id,
+    awarded_at: now.toISOString(),
+    awarded_by: systemAward ? "system" : "human",
+    points: tier.points,
+    human_feedback: specificFeedback,
+    evidence_summary: String(claim.summary).slice(0, 600),
+    ...(achievement.extensions?.source_skill ? { source_skill: achievement.extensions.source_skill } : {}),
+    evidence: (claim.evidence || []).slice(0, 12)
+  };
+}
+
+function settleTrustedAutomaticClaims(state, claims, options = {}) {
+  state.awards ||= [];
+  const awarded = [];
+  for (const claim of claims || []) {
+    if (claim.status !== "pending_human_review") continue;
+    const achievement = (state.achievements || []).find((item) => item.achievement_id === claim.achievement_id);
+    if (!trustedAutomaticClaim(achievement, claim, state)) continue;
+    const duplicate = state.awards.some((item) => item.achievement_id === claim.achievement_id && item.agent_id === claim.agent_id);
+    claim.status = "awarded";
+    claim.reviewed_at = (options.now || new Date()).toISOString();
+    claim.review_policy = "trusted_autopilot";
+    if (!duplicate) {
+      const award = buildAward(achievement, claim, { now: options.now, awardedBy: "system" });
+      state.awards.push(award);
+      awarded.push(award);
+      claim.human_feedback = award.human_feedback;
+    }
+  }
+  return { state, claims, awarded };
+}
+
+function reviewPendingClaim(state, claims, claimId, decision, feedback, options = {}) {
+  if (!new Set(["award", "reject"]).has(decision)) throw new Error("claim-decision-invalid");
+  const claim = (claims || []).find((item) => item.claim_id === String(claimId));
+  if (!claim || claim.status !== "pending_human_review") throw new Error("claim-not-found");
+  const achievement = (state.achievements || []).find((item) => item.achievement_id === claim.achievement_id);
+  if (!achievement) throw new Error("achievement-not-found");
+  if (decision === "award" && !reachedTarget(state, achievement, claim.agent_id)) throw new Error("achievement-not-earned");
+  if (decision === "award" && achievement.evidence_required && (!Array.isArray(claim.evidence) || !claim.evidence.length)) throw new Error("claim-evidence-insufficient");
+  const now = options.now || new Date();
+  claim.status = decision === "award" ? "awarded" : "rejected";
+  claim.reviewed_at = now.toISOString();
+  claim.human_feedback = String(feedback || "").trim().slice(0, 600)
+    || (decision === "award"
+      ? `我认可这次完成的结果：${claim.summary}`
+      : `这次暂不授予“${achievement.title}”：现有记录还不足以确认达成。`)
+      .slice(0, 600);
+  let award = null;
+  if (decision === "award" && !state.awards.some((item) => item.achievement_id === claim.achievement_id && item.agent_id === claim.agent_id)) {
+    award = buildAward(achievement, claim, { now, awardedBy: "human", feedback: claim.human_feedback });
+    state.awards.push(award);
+  }
+  return { state, claims, claim, award };
 }
 
 function normalizedId(value, maxLength) {
@@ -170,4 +667,24 @@ function updateTrackedIds(currentIds, achievementId, enabled, limit = 3) {
   return { tracked: [...tracked], trackingLimitReached: false };
 }
 
-module.exports = { buildHumanAchievement, buildSystemAchievement, calculateScore, settleDiagnosticReport, tierMetadata, TIER_CONFIG, updateTrackedIds };
+module.exports = {
+  agentBlockedAchievementIds,
+  alignAutopilotTracking,
+  buildAgentConnectionContext,
+  buildAutopilotView,
+  buildHumanAchievement,
+  buildSystemAchievement,
+  calculateAgentScore,
+  calculateScore,
+  completedTaskViews,
+  DEFAULT_WUXING_CHALLENGES,
+  ensureDefaultWuxingChallenges,
+  reviewPendingClaim,
+  scoreLevel,
+  settleDiagnosticReport,
+  settleTrustedAutomaticClaims,
+  setAgentAchievementBlocked,
+  tierMetadata,
+  TIER_CONFIG,
+  updateTrackedIds
+};

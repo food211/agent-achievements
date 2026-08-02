@@ -78,12 +78,12 @@ function setupAchievements() {
   if (!cli) return { status: "not_installed" };
   const initialized = runAchievements(cli, ["init"]);
   if (!initialized.ok) return { status: "failed", error: initialized.error };
-  const definitions = ["rule-gardener.achievement.json", "product-gatekeeper.achievement.json"];
+  const definitions = ["rule-gardener.achievement.json", "product-gatekeeper.achievement.json", "loop-keeper.achievement.json"];
   for (const file of definitions) {
     const defined = runAchievements(cli, ["define", "--input", path.join(skillRoot, "references", file), "--if-absent"]);
     if (!defined.ok) return { status: "failed", error: defined.error };
   }
-  return { status: "ready", achievements: ["wuxing-rule-gardener", "wuxing-product-gatekeeper"] };
+  return { status: "ready", achievements: ["wuxing-rule-gardener", "wuxing-product-gatekeeper", "wuxing-loop-keeper"] };
 }
 
 function normalizedEvidence(items) {
@@ -96,6 +96,9 @@ function normalizedEvidence(items) {
 
 function achievementEvent(finding, eventType, extraEvidence = []) {
   const eventId = `wuxing:${finding.finding_id}:${eventType}:${randomUUID()}`;
+  const lifecycleEvidence = eventType === "judgment.requested"
+    ? [{ type: "trace", ref: `wuxing-finding:${finding.finding_id}`, summary: "Harness 已挂起这条高影响分支并等待人的判断。" }]
+    : [];
   return {
     schema_version: "agent-achievements/v1",
     event_id: eventId,
@@ -104,11 +107,12 @@ function achievementEvent(finding, eventType, extraEvidence = []) {
     source: { system: "wuxing-harness", version: "0.1.0" },
     actor: { agent_id: option("agent", "wuxing-agent") },
     task: { id: option("task-id", finding.finding_id), type: option("task-type", "rule-maintenance") },
+    run: { id: option("run-id", option("task-id", finding.finding_id)) },
     outcome: {
       status: eventType === "judgment.requested" ? "parked" : "completed",
       summary: eventType === "judgment.requested" ? `规则边界需要人判断：${finding.title}` : `规则已经按人的决定修改并验证：${finding.title}`
     },
-    evidence: [...normalizedEvidence(finding.evidence), ...extraEvidence],
+    evidence: [...normalizedEvidence(finding.evidence), ...lifecycleEvidence, ...extraEvidence],
     extensions: { finding_id: finding.finding_id, relation: finding.relation || "unmapped", human_decision_required: true }
   };
 }

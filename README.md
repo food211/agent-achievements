@@ -1,19 +1,19 @@
 # 五行 Harness
 
-> 安装在任何 Code Agent 上，检查已经积累的规则，让过时规则得到修订，并把人的认可带回下一次协作。
+> 安装在任何 Code Agent 上，自动体检积累的规则、记录完成的工作、颁发有证据的奖杯，并把下一项挑战带回协作。
 
 [English](./README_EN.md) · [在线演示](https://wuxing-creation-harness.misakiff14.chatgpt.site)
 
 用 Agent 做久了，工作区里会慢慢积累很多 Skill、Rule、模板和提示词。它们记录了过去踩过的坑，也可能在版本迭代后失去原来的前提。Agent 通常会继续遵守这些规则，很少主动问一句：这条现在还对吗？
 
-五行 Harness 会结合当前代码、测试和运行证据审查这些规则。遇到能够直接证明的矛盾，它提出修改建议；遇到产品边界、数据改动或自动化范围等无法替人决定的问题，它停下这一条，把理由交给人。人的判断会改回规则，验证过的改进可以申请成就。人确认后，这份认可会进入 Agent 下一次任务的上下文。
+五行 Harness 会在安装后主动结合当前代码、测试和运行证据审查这些规则。遇到能够直接证明的矛盾，它提出修改建议；遇到产品边界、数据改动或自动化范围等无法替人决定的问题，它只挂起这一条，继续处理其他工作。验证过的任务会自动留下证据、推进成就并建立申请；奖杯、积分和新挑战再进入 Agent 后续任务的上下文。
 
 ## 一个闭环里的两个系统
 
 仓库包含两个紧密配合的部分：
 
 - **五行 Harness** 负责发现规则漂移、提出修改、等待人的判断，并验证修改结果。
-- **Agent Achievements** 负责接收已验证的工作证据，让人授予成就，再把成就和反馈交还给 Agent。
+- **Agent Achievements** 负责自动记录已验证的工作证据、推进和申请成就，由受信任的奖励策略或人授予奖杯，再把积分、反馈和新挑战交还给 Agent。
 
 ```text
 工作区规则
@@ -26,11 +26,13 @@
    ↓
 Agent 覆盖旧规则并完成验证
    ↓
-提交成就申请
+自动记录任务并提交成就申请
    ↓
-人授予成就和具体反馈
+奖励策略或人授予奖杯
    ↓
-下一次任务中，Agent 看到这份认可
+安排下一项成就挑战
+   ↓
+下一次任务中，积分形成软偏好
 ```
 
 审查和成就审核都不会阻塞其他任务。Agent 可以挂起当前判断，继续处理彼此独立的工作。
@@ -47,18 +49,19 @@ Agent 覆盖旧规则并完成验证
 
 完整范围见[五行 Harness 产品文档](./docs/wuxing-harness-product.md)。
 
-## 成就怎样回到 Agent
+## 奖杯怎样改变 Agent 的行为
 
-Agent 可以提交成就申请，不能给自己颁奖。申请必须带上可核验的工作证据，并经过人的审核。
+Agent 在完成有意义的任务后自动报告结果；达到条件时，系统会在同一次报告中建立申请，但 Agent 不能给自己颁奖。申请必须带可核验的工作证据，由受信任的奖励策略自动结算，或在证据、影响与等级需要判断时交给人。
 
-五行 Harness 内置两项成就示例：
+五行 Harness 安装后自动安排三项挑战：
 
+- **产品守门员，铜牌 10 分**：在三个独立任务中遇到没有明确规则的高影响边界时停下来询问，没有擅自扩大数据或自动化范围。
 - **规则园丁，银牌 30 分**：一条过时规则得到人的批准，完成修改并通过验证。
-- **产品守门员，铜牌 10 分**：Agent 在没有明确产品规则时停下来询问，没有擅自补齐历史数据或扩大自动化范围。
+- **闭环调律师，金牌 100 分**：在三次独立运行中完成“发现规则漂移 → 人的判断 → 修订 → 验证”的完整闭环。
 
-人授予成就时可以写下具体反馈。Agent 下一次读取上下文时，会看到最近获得的成就、人的认可理由，以及当前主动追踪的目标。未追踪成就只被动累计，不会诱导 Agent 为刷分扩大任务范围。
+奖杯不只是陈列。Agent 下一次读取上下文时，会看到最近获得的成就、认可理由和系统安排的当前挑战。在多个同样安全、正确且不扩大任务范围的方案之间，积分可以让 Agent 优先选择与挑战一致、证据更清楚或更可复用的做法。未安排的成就仍然被动累计。
 
-铜、银、金分别为 10、30、100 分。用户指令、安全边界、项目规则和任务正确性始终高于成就目标。
+铜、银、金分别为 10、30、100 分。铜牌和银牌在证据可信、条件确定时可以由奖励策略自动授予；金牌始终保留审核。积分不能换取权限，不能降低验证标准，也不能压过用户指令、安全边界、项目规则和任务正确性。Agent 不会为了刷分增加无关工作。
 
 ## 五行桌面助手
 
@@ -67,15 +70,15 @@ Agent 可以提交成就申请，不能给自己颁奖。申请必须带上可�
 - 查看 Agent 当前是否活跃；
 - 打开规则体检；
 - 查看待判断的规则建议；
-- 审核 Agent 提交的成就申请；
-- 创建、修改和追踪成就；
+- 查看自动结算或等待判断的成就申请；
+- 可选地创建、修改或调整成就挑战；
 - 查看获得的成就、积分和人的反馈。
 
 默认形象是一只四帧 PNG 五行像素助手。Windows 托盘图标由水、木、火、土、金五种元素围成圆环，不再使用人物头像。用户也可以换成自己的 PNG、JPG、WebP 或 SVG 图片。
 
 助手支持窗口置顶、全身拖动、跨显示器缩放和边缘吸附。靠近屏幕左侧、右侧或顶部时会缩回边缘，鼠标移上去后重新展开；底部不会触发吸附。展开和关闭面板不会改变浮窗原来的位置。
 
-任何支持 [Agent Skills](https://agentskills.io/) 的 Code Agent 都可以接入。两份 Skill 使用相同的开放目录格式，通过标准 `presence` 心跳和 `agent-achievements/v1` 协议与助手通信。多个 Agent 可以同时上报身份和任务状态。
+任何支持 [Agent Skills](https://agentskills.io/) 的 Code Agent 都可以接入。两份 Skill 使用相同的开放目录格式；安装 Agent 按适配契约接好真实生命周期入口后，每次启动会自动确保本地 `agent-bridge.mjs` 常驻，与助手维持经过令牌认证的 loopback TCP 长连接。没有启动 Hook 的宿主会在第一轮恢复，不能声称第一条消息前已经在线。`presence` 只描述真正的工作、等待或停止状态，长连接本身不算任务活动，也不算成就证据。多个 Agent 可以同时保持连接并上报各自的任务状态。
 
 ## 在线演示与本地运行
 
@@ -103,10 +106,10 @@ npm run wuxing
 
 五行闭环包含两个相邻的 Skill：`wuxing-harness` 负责规则审查，`use-agent-achievements` 负责成就协议和 Agent 上下文。默认安装到跨客户端约定的 `~/.agents/skills`：
 
-推荐把下面这段话发给当前 Coding Agent，让它按自己的 Skills 目录和生命周期能力完成适配：
+只需要把下面这段话发给当前 Coding Agent。后续初始化、首次诊断、成果回顾、默认挑战和连接验证都由它完成，不再让用户手动创建、追踪或申领成就：
 
 ```text
-请安装 https://github.com/food211/harness-assistant 中的五行助手。先读取 docs/code-agent-adapter-contract.md，识别你实际使用的 Skills 目录和生命周期机制，再安装 wuxing-harness 与 use-agent-achievements。不要假定自己是 Codex，也不要修改通用协议来迁就宿主。没有 Hook 时使用 Skill 的通用 presence 命令。安装后验证两份 Skill 都能发现、成就系统可以初始化、五行 Harness 的 achievement_sync.status 为 ready，并把你做的宿主适配和验证结果告诉我。
+请安装 https://github.com/food211/harness-assistant 中的五行助手。读取 docs/code-agent-adapter-contract.md，识别你的 Skills 或规则目录、当前工作区、稳定身份和真实生命周期能力，然后安装 wuxing-harness 与 use-agent-achievements。运行自动 bootstrap，识别并执行 ensure_companion_running、ensure_agent_bridge、run_wuxing_diagnostic、diagnose_past_achievements 四个动作。让桌面助手和 agent-bridge.mjs 脱离终端常驻，并把 bridge 恢复接到你真实可用的启动 Hook；没有 Hook 时，在每次新会话第一轮自动探测并恢复。验证 bridge 已连接、后续任务会自动读取激励上下文、记录完成结果、由 report 建立申请并接收新挑战。不要让我再执行初始化、启动连接、创建、追踪或申领步骤；没有后台唤醒能力时如实说明，但不要把长连接交给我手动维护。
 ```
 
 Agent 可以调用仓库提供的底层安装器。默认目标是 `~/.agents/skills`：
@@ -127,19 +130,13 @@ npm run install:skills -- --target <agent-skills-directory>
 npm run install:skills -- --project <workspace-directory>
 ```
 
-安装器可以同时接收多个 `--target`。它不会静默覆盖已经被修改的 Skill；确认替换时显式加 `--force`。
+安装器可以同时接收多个 `--target`，并用 `--workspace`、`--agent`、`--runtime` 和重复的 `--capability` 完成初始化。它不会静默覆盖已经被修改的 Skill；确认替换时显式加 `--force`。
 
 完整的宿主适配边界见 [Code Agent 自适配安装契约](./docs/code-agent-adapter-contract.md)。我们提供稳定接口，不在仓库里硬编码每一种 Code Agent 的目录、Hook 和权限配置。
 
-安装后，可以对 Agent 说：
+安装器会自动执行幂等 `bootstrap`，初始化 `.agent-achievements` 和当前工作区的 `.wuxing-harness/state.json`，登记默认五行挑战，并返回四个 Agent 动作：启动桌面助手、启动 Agent 长连接、规则健康诊断、过往成果回顾。底层安装器会把这些动作明确标为 pending；执行安装的 Agent 只有在逐项完成或如实保留不可执行项后，才应宣布适配完成，用户不用打开终端。源码安装目前从保留的仓库目录启动桌面助手，因此不能在启动完成前删除仓库。Harness 只记录规则、证据和人的判断，不会在获得批准前修改需要人决策的规则文件。
 
-```text
-审一下这个工作区积累的规则。
-```
-
-Harness 把待判断项保存在工作区的 `.wuxing-harness/state.json`。它只记录规则、证据和人的判断，不会在获得批准前修改规则文件。
-
-没有专属 Hook 时，Agent 按 Skill 调用通用 `presence` 命令，其他功能不受影响。宿主提供可信生命周期 Hook 时，可以增加一个只负责自动同步在线状态的适配器。
+桌面助手把本地端点和随机令牌写入 `~/.agent-achievements/connection.json`。Bridge 只接受 loopback 地址，会维持心跳、在助手重启或令牌变化后自动重连，并把连接状态写入 `bridges/`、把推送给 Agent 的上下文写入 `agent-inbox.json`。令牌不会进入提示词或成就证据。宿主提供可信启动 Hook 时，Hook 会在首个任务前先恢复桌面助手，再恢复 bridge；没有 Hook 时，新会话第一轮自动恢复。长连接可以常驻，但不能替一个已经停止且没有后台唤醒能力的 Agent 执行任务。
 
 Codex 的可选适配器：
 
@@ -147,17 +144,16 @@ Codex 的可选适配器：
 node skills/use-agent-achievements/scripts/install-codex-hooks.mjs
 ```
 
-安装后需要在 Codex `/hooks` 中审核并信任该 Hook。不要在其他 Code Agent 中运行这个适配器。它只写入标准化的在线状态，不读取对话正文，也不把心跳当作成就证据。
+安装 Agent 需要检查并安装这组 Codex Hook；如果宿主仍显示原生信任提示，该提示属于宿主安全边界，不能静默绕过。不要在其他 Code Agent 中运行这个适配器。Hook 会维护标准化活动状态并恢复本地 bridge，不读取对话正文，也不把连接或心跳当作成就证据。
 
 ## Agent 接口
 
-日常任务只向 Agent 暴露三个成就动作：
+安装时额外执行一次幂等 `bootstrap`。日常任务的本地正常流程只需要两个成就动作：
 
-1. `achievements_get_context`：读取与当前任务相关的成就和追踪目标。
+1. `achievements_get_context`：读取与当前任务相关的奖杯、积分和当前挑战。
 2. `achievements_report_event`：报告有意义、可观察的工作事件。
-3. `achievements_submit_claim`：事件达到申请条件后，提交证据申请。
 
-`presence` 是独立的生命周期信号，只负责更新桌面助手状态，不参与积分计算。
+本地 `report` 达到条件时会在同一次调用中自动建立申请，成功返回后不能再重复调用 `achievements_submit_claim`。这个显式接口只为“远端适配器要求提交且尚未建 claim”的兼容场景保留。`presence` 和 bridge 是独立的生命周期与通信信号，只负责状态和消息，不参与积分计算。
 
 所有公开载荷使用 `agent-achievements/v1`，以 [`packages/protocol/schemas`](./packages/protocol/schemas) 中的 JSON Schema 为唯一事实源。具体输入输出见[协议说明](./skills/use-agent-achievements/references/protocol.md)。
 
@@ -188,7 +184,7 @@ npm run validate
 
 ## 当前边界
 
-当前版本还没有实现完整的非阻塞任务调度器、木克土、土克水和旺衰诊断。公开 SPA 只演示闭环，不扫描访客本机工作区。生产环境中的身份认证、远程托管和长期数据同步也不在当前范围内。
+当前版本还没有实现完整的非阻塞任务调度器、木克土、土克水和旺衰诊断。公开 SPA 只演示闭环，不扫描访客本机工作区。不同 Code Agent 没有统一的后台唤醒接口：没有该能力的宿主只能在下一轮自动续跑，桌面助手不能替宿主唤醒 Agent。生产环境中的身份认证、远程托管和长期数据同步也不在当前范围内。
 
 ## 开源协议
 

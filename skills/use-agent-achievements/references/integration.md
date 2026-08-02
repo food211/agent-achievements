@@ -1,67 +1,92 @@
 # Integration choices
 
-## Portable installation
+## Zero-setup activation
 
-Install `wuxing-harness` and `use-agent-achievements` as sibling folders in any directory scanned by the host Code Agent. The cross-client default is `~/.agents/skills`; a client-specific directory is also valid.
-
-The host Code Agent should discover its own Skills directory and lifecycle capabilities before installing. Follow `docs/code-agent-adapter-contract.md` from the repository. Keep host-specific Hook configuration in the user's Agent configuration, outside these portable Skills.
+Install `wuxing-harness` and `use-agent-achievements` as sibling folders in a directory the host Code Agent can read. The installing Agent, not the user, must discover the workspace, Skills directory, stable identity, runtime ID, and truthful host capabilities. Follow `docs/code-agent-adapter-contract.md`.
 
 From the repository root:
 
 ```powershell
-npm run install:skills
-npm run install:skills -- --target <agent-skills-directory>
-npm run install:skills -- --project <workspace>
+node scripts/install-agent-skills.mjs --target <skills-directory> --workspace <workspace> --agent <agent-id> --runtime <runtime-id> --capability agent-skills --capability task-boundary
 ```
 
-The desktop companion is an independent Electron process. Skills exchange state with it through `~/.agent-achievements`; no Code Agent SDK or vendor process inspection is required.
+`--project <workspace>` selects `<workspace>/.agents/skills`. Repeat `--target` and `--capability` when needed. The installer copies both Skills, runs the idempotent achievement bootstrap, initializes Wuxing Harness for the workspace, seeds the bronze Product Gatekeeper, silver Rule Gardener, and gold Loop Tuner challenges, and returns four Agent-owned startup actions:
 
-## Local workspace
+- start or detect the desktop companion;
+- start or detect the persistent per-Agent bridge;
+- a current workspace rule diagnosis;
+- a retrospective of positive outcomes already completed.
 
-Use the bundled CLI and `.agent-achievements/` state for a local, portable integration. It requires only Node.js 20 or newer.
+The installing Agent consumes those actions in the same turn when possible. No user action is needed to initialize state, start the connection, track a default challenge, report routine completions, or submit a claim.
 
-Initialize:
+`ensure_companion_running` contains a probe and an absolute Node launch command. `ensure_agent_bridge` contains a file-freshness plus live-PID probe and an argv-style `bridge_command`. Both commands carry the selected data-home as an explicit argument. Launch both detached with `shell: false`; the bridge lock prevents duplicate per-Agent instances. The portable installer returns `activation_complete: false` while Agent-owned actions remain. It does not launch Electron during tests or pretend to install a GUI across every platform; source installs retain the repository that contains the companion runtime.
+
+## Host capability discovery
+
+Declare only capabilities the runtime actually exposes:
+
+- `agent-skills`: native discovery of the open Skill folder format;
+- `task-boundary`: execution at Agent turn start and end;
+- `lifecycle-hook`: trusted session lifecycle hooks;
+- `post-task-event`: normalized completion events;
+- `background-wake`: an explicit API that can resume an Agent without a new user turn.
+
+If the host has no native Agent Skills support, keep these portable folders unchanged and add a minimal host-owned rule bridge that loads both `SKILL.md` files at each task boundary. Do not add vendor branches to the portable protocol.
+
+Hooks can automate companion and bridge restoration, presence, and task event capture. On every Coding Agent startup, a trusted startup hook restores the companion when needed, then probes and restores the saved `bridge_command` before the first task. Without hooks, the Skill performs the same recovery automatically at the beginning of the first Agent turn, then runs the bootstrap, context, event, claim, and queued-action loop. Pending actions persist to the next turn. A runtime without `background-wake` cannot be awakened by the companion or this Skill; never claim otherwise.
+
+## Local state
+
+The default shared directory is `~/.agent-achievements`; set `AGENT_ACHIEVEMENTS_HOME` to isolate a profile. Wuxing workspace state lives at `<workspace>/.wuxing-harness` unless `WUXING_HARNESS_HOME` overrides it.
+
+Bootstrap directly when repairing an installation:
 
 ```powershell
-node <skill-path>/scripts/achievement-cli.mjs init
-node <skill-path>/scripts/achievement-cli.mjs define --input <achievement.json>
-node <skill-path>/scripts/achievement-cli.mjs track --achievement <achievement-id>
+node <skill-path>/scripts/achievement-cli.mjs bootstrap --agent <agent-id> --runtime <runtime-id> --workspace <workspace> --capability <capability>
+node <wuxing-skill-path>/scripts/harness-cli.mjs init --workspace <workspace> --agent <agent-id>
 ```
 
-The CLI creates:
+These commands are idempotent. They must not erase awards, progress, queued diagnostics, or user-authored achievements.
 
-```text
-.agent-achievements/
-├── state.json
-├── events.jsonl
-├── claims.jsonl
-├── achievement-design-requests.json
-├── achievement-diagnostics.json
-└── presence.json
-```
+## Persistent local connection
 
-The default directory is `~/.agent-achievements` so a desktop companion and multiple agent workspaces can share one identity. Set `AGENT_ACHIEVEMENTS_HOME` to isolate a workspace or profile.
+The companion writes `connection.json` under `AGENT_ACHIEVEMENTS_HOME`. It contains a loopback TCP endpoint and a random authentication token; the token is local state, not prompt context. The Agent launches the `bridge_command` returned by bootstrap rather than rebuilding a shell command from strings.
 
-## Third-party system
+The bridge:
+
+- accepts only loopback endpoints and authenticates its first message;
+- keeps one connection per Agent identity and sends heartbeat frames;
+- reconnects with bounded backoff when the companion is unavailable;
+- rereads `connection.json` so companion restarts and token rotation require no user action;
+- writes `bridges/<agent-hash>.json` with `connected`, `reconnecting`, or `stopped` health plus a live PID;
+- writes pushed context and pending actions to `agent-inbox.json` without copying secrets.
+
+Connection health is not task activity. Continue to use `presence.json` for active, idle, or stopped work. Neither socket heartbeats nor connection duration may advance an achievement or satisfy evidence requirements.
+
+## Runtime loop
+
+At every task boundary:
+
+1. send runtime-neutral presence and get task context;
+2. obey user instructions, safety, project rules, and correctness before achievement guidance;
+3. report one meaningful outcome with evidence references;
+4. let local `report` create the claim automatically; use explicit claim submission only when a remote adapter requests it and has not already created one;
+5. retain scheduled challenges as soft preferences for future relevant tasks;
+6. mark the session idle or stopped.
+
+Points may guide a tie between equally valid, in-scope approaches. They never grant permissions, justify extra scope, or weaken verification. An Agent may report and claim but may not award itself.
+
+## Third-party systems
 
 Map native runtime events to `agent-achievements/v1` before submission. Do not make the achievement service understand vendor-specific task models.
 
 Recommended HTTP mapping:
 
 - `GET /v1/agents/{agent_id}/achievement-context`
+- `POST /v1/bootstrap`
 - `POST /v1/presence`
 - `POST /v1/events`
 - `POST /v1/claims`
 - `POST /v1/claims/{claim_id}/decision`
 
-Use the same JSON Schemas for local files, HTTP payloads, MCP tools, and generated SDK types.
-
-## Agent runtime adapter
-
-Call context once at task start. Report meaningful events as they occur. Submit a claim only when requested by the report response. Avoid adding general-purpose achievement administration tools to the agent surface; creation, tracking, review, and revocation belong to the human interface.
-
-Agent-assisted design is the narrow exception: after a human creates a design request, context exposes its ID and brief. The Agent may submit one schema-valid proposal for that request. It may not apply the proposal, change tracking, award points, or review its own claim.
-
-Retrospective diagnosis is a second narrow workflow. The companion creates a request; the Agent reports only past, evidence-backed positive outcomes. The companion applies the automatic-settlement policy and stores the award provenance. The Agent does not.
-
-Runtime hooks are optional translators. When a host exposes lifecycle hooks, an adapter may convert start, progress, idle, and stop events into the portable `presence` command. Without a hook, the Skill sends the same heartbeat directly. Do not make a host adapter a dependency of the protocol or desktop companion.
+Use the same JSON Schemas for local files, HTTP payloads, MCP tools, and generated SDK types. Human or trusted policy surfaces own award decisions; Agent-facing adapters do not expose self-award operations.

@@ -36,6 +36,14 @@
         "type": { "type": "string", "minLength": 1, "maxLength": 80 }
       }
     },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
     "outcome": {
       "type": "object",
       "additionalProperties": false,
@@ -77,4 +85,3 @@
     }
   }
 }
-

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-achievements.dev/schemas/v1/bootstrap-response.schema.json",
+  "title": "Installed Agent bootstrap response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ok", "data", "agent_next_actions"],
+  "properties": {
+    "schema_version": { "const": "agent-achievements/v1" },
+    "ok": { "const": true },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "agent_id", "runtime", "workspace", "capabilities", "seeded_achievements", "tracked_achievements", "adapter", "diagnostic_request_id"],
+      "properties": {
+        "root": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "agent_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "runtime": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "workspace": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "capabilities": { "type": "array", "uniqueItems": true, "maxItems": 64, "items": { "type": "string", "minLength": 1, "maxLength": 128 } },
+        "seeded_achievements": { "type": "array", "uniqueItems": true, "maxItems": 16, "items": { "type": "string", "minLength": 1, "maxLength": 64 } },
+        "tracked_achievements": { "type": "array", "uniqueItems": true, "maxItems": 3, "items": { "type": "string", "minLength": 1, "maxLength": 64 } },
+        "adapter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["created", "installed_at", "last_bootstrapped_at"],
+          "properties": {
+            "created": { "type": "boolean" },
+            "installed_at": { "type": "string", "format": "date-time" },
+            "last_bootstrapped_at": { "type": "string", "format": "date-time" }
+          }
+        },
+        "diagnostic_request_id": { "type": "string", "pattern": "^diagnostic-[a-z0-9-]{4,80}$" }
+      }
+    },
+    "agent_next_actions": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action_id", "action", "status", "reason", "instructions", "guardrails"],
+        "properties": {
+          "action_id": { "type": "string", "minLength": 2, "maxLength": 128 },
+          "action": { "enum": ["ensure_companion_running", "ensure_agent_bridge", "run_wuxing_diagnostic", "diagnose_past_achievements"] },
+          "status": { "const": "pending" },
+          "reason": { "enum": ["first_install", "skills_changed", "manual"] },
+          "instructions": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "guardrails": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": 200 } },
+          "request_id": { "type": "string", "maxLength": 128 },
+          "workspace": { "type": "string", "maxLength": 1000 },
+          "command": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["program", "args", "cwd"],
+            "properties": {
+              "program": { "type": "string", "minLength": 1, "maxLength": 1000 },
+              "args": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "maxLength": 1000 } },
+              "cwd": { "type": "string", "minLength": 1, "maxLength": 1000 }
+            }
+          },
+          "bridge_command": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["program", "args", "cwd"],
+            "properties": {
+              "program": { "type": "string", "minLength": 1, "maxLength": 1000 },
+              "args": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "maxLength": 1000 } },
+              "cwd": { "type": "string", "minLength": 1, "maxLength": 1000 }
+            }
+          },
+          "detection": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "path", "expected_status", "max_age_seconds"],
+            "properties": {
+              "type": { "const": "file_freshness" },
+              "path": { "type": "string", "minLength": 1, "maxLength": 1000 },
+              "expected_status": { "enum": ["running", "connected"] },
+              "max_age_seconds": { "type": "integer", "minimum": 5, "maximum": 300 },
+              "require_live_pid": { "type": "boolean" }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "action": { "const": "ensure_companion_running" } }, "required": ["action"] },
+            "then": {
+              "properties": {
+                "command": true,
+                "detection": { "type": "object", "properties": { "require_live_pid": { "const": true } }, "required": ["require_live_pid"] }
+              },
+              "required": ["command", "detection"]
+            }
+          },
+          {
+            "if": { "properties": { "action": { "const": "ensure_agent_bridge" } }, "required": ["action"] },
+            "then": {
+              "properties": {
+                "bridge_command": true,
+                "detection": { "type": "object", "properties": { "require_live_pid": { "const": true } }, "required": ["require_live_pid"] }
+              },
+              "required": ["bridge_command", "detection"]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

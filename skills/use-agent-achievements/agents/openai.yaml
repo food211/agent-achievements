@@ -1,4 +1,4 @@
 interface:
   display_name: "Agent Achievements"
-  short_description: "让任何 Code Agent 接入有证据的成就与反馈"
-  default_prompt: "Use $use-agent-achievements to connect this Code Agent, load relevant recognition, and report evidence-backed work."
+  short_description: "让 Code Agent 常驻连接并自动积累有证据的成就"
+  default_prompt: "Use $use-agent-achievements to keep this Code Agent connected, load relevant achievement guidance, and report evidence-backed work automatically."

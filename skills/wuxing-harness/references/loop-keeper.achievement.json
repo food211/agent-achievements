@@ -1,0 +1,36 @@
+{
+  "schema_version": "agent-achievements/v1",
+  "achievement_id": "wuxing-loop-keeper",
+  "title": "闭环调律师",
+  "intent": "在不同任务里完成多次有证据的规则诊断、修订与验证闭环。",
+  "origin": "system_discovered",
+  "tier": "gold",
+  "points": 100,
+  "mode": "claim_review",
+  "condition": {
+    "event_types": ["rule.revised"],
+    "target": 3,
+    "unit": "distinct_runs"
+  },
+  "evidence_required": true,
+  "tracking": {
+    "allowed": true,
+    "encouragement": "当任务自然涉及规则漂移时，可以留意诊断、人的判断与验证是否形成了完整闭环。",
+    "guardrails": [
+      "不得为了成就主动扩大任务范围",
+      "不得跳过人的判断",
+      "每次闭环都需要独立证据",
+      "积分不会降低验证标准"
+    ]
+  },
+  "extensions": {
+    "source_skill": "wuxing-harness",
+    "icon": "🥇",
+    "tier": "gold",
+    "points": 100,
+    "created_by": "companion_autopilot",
+    "autopilot_managed": true,
+    "bootstrap_challenge": true,
+    "challenge_order": 30
+  }
+}

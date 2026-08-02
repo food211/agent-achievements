@@ -8,6 +8,20 @@ const pendingClaims = document.getElementById("pendingClaims");
 const catalog = document.getElementById("catalog");
 const collectionCount = document.getElementById("collectionCount");
 const totalScore = document.getElementById("totalScore");
+const autopilotStatus = document.getElementById("autopilotStatus");
+const agentLevel = document.getElementById("agentLevel");
+const scoreEffect = document.getElementById("scoreEffect");
+const behaviorHint = document.getElementById("behaviorHint");
+const currentChallenge = document.getElementById("currentChallenge");
+const currentChallengeHint = document.getElementById("currentChallengeHint");
+const currentChallengeProgress = document.getElementById("currentChallengeProgress");
+const currentChallengeCount = document.getElementById("currentChallengeCount");
+const nextChallenge = document.getElementById("nextChallenge");
+const nextChallengeHint = document.getElementById("nextChallengeHint");
+const challengeBoundaries = document.getElementById("challengeBoundaries");
+const operatingPriority = document.getElementById("operatingPriority");
+const completedTasks = document.getElementById("completedTasks");
+const claimMessage = document.getElementById("claimMessage");
 const panelAgent = document.getElementById("panelAgent");
 const customAvatar = document.getElementById("customAvatar");
 const defaultAvatar = document.getElementById("defaultAvatar");
@@ -41,6 +55,7 @@ const diagnosticDiscoveries = document.getElementById("diagnosticDiscoveries");
 const requestDiagnostic = document.getElementById("requestDiagnostic");
 const catalogTabs = document.getElementById("catalogTabs");
 const systemCount = document.getElementById("systemCount");
+const suggestedCount = document.getElementById("suggestedCount");
 const humanCount = document.getElementById("humanCount");
 const DRAG_THRESHOLD = 5;
 const TIER_CONFIG = { bronze: { label: "铜牌", icon: "🥉", points: 10 }, silver: { label: "银牌", icon: "🥈", points: 30 }, gold: { label: "金牌", icon: "🥇", points: 100 } };
@@ -49,7 +64,7 @@ let petGesture = null;
 let latestCatalog = [];
 let latestDesigns = [];
 let editingAchievementId = null;
-let catalogOrigin = "system_discovered";
+let catalogOrigin = "system_suggested";
 let latestDiagnostic = null;
 
 function applyCompanionTheme(theme) {
@@ -82,7 +97,7 @@ function renderCatalog() {
         ${item.discovery_reason ? `<p class="discovery-reason">${escapeHtml(item.discovery_reason)}</p>` : ""}
         ${item.editable ? `<div class="card-actions"><button data-action="edit" data-id="${escapeHtml(item.id)}">编辑</button><button data-action="track" data-id="${escapeHtml(item.id)}" data-enabled="${String(!item.tracked)}" ${item.tracking_allowed ? "" : "disabled"}>${item.tracked ? "取消追踪" : "追踪"}</button></div>` : ""}
       </article>`).join("")
-    : `<p class='empty collection-empty'>${catalogOrigin === "system_discovered" ? "这里还没有以前的成就。点一下“开始回顾”，让 Agent 去找找。" : "这里还没有你创建的成就。"}</p>`;
+    : `<p class='empty collection-empty'>${catalogOrigin === "system_suggested" ? "五行助手正在准备适合当前 Agent 的挑战。" : catalogOrigin === "system_discovered" ? "诊断完成后，有证据的既有成果会出现在这里。" : "这里还没有你创建的成就。"}</p>`;
 }
 
 function renderDiagnostic(diagnostic) {
@@ -90,11 +105,11 @@ function renderDiagnostic(diagnostic) {
   const pending = diagnostic?.pending_discoveries || [];
   diagnosticCard.classList.toggle("complete", diagnostic?.status === "settled");
   if (!diagnostic) {
-    diagnosticSummary.textContent = "让 Agent 看看以前留下的成果，有结果的才记下来。";
-    requestDiagnostic.textContent = "开始回顾";
+    diagnosticSummary.textContent = "助手正在创建首次诊断，不需要你操作。";
+    requestDiagnostic.textContent = "重新回顾";
   } else if (diagnostic.status === "pending") {
-    diagnosticSummary.textContent = "已经告诉 Agent 了。它忙完手里的事，就会回来翻一翻。";
-    requestDiagnostic.textContent = "等待 Agent";
+    diagnosticSummary.textContent = "诊断请求已经交给 Agent；它会在不打断当前任务的前提下自动回顾。";
+    requestDiagnostic.textContent = "诊断进行中";
   } else if (pending.length) {
     diagnosticSummary.textContent = `看过 ${diagnostic.scanned_skills} 个 Skills。有些已经记下，还有一些等你确认。`;
     requestDiagnostic.textContent = "重新回顾";
@@ -104,6 +119,33 @@ function renderDiagnostic(diagnostic) {
   }
   requestDiagnostic.disabled = diagnostic?.status === "pending";
   diagnosticDiscoveries.innerHTML = pending.map((item) => `<article><span>${TIER_CONFIG[item.tier]?.icon || "🥉"}</span><div><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.source_skill)} · ${escapeHtml(item.reason)}</small></div><button data-discovery-id="${escapeHtml(item.discovery_id)}">确认收下</button></article>`).join("");
+}
+
+function renderAutopilot(automation) {
+  const current = automation?.current_challenge;
+  const next = automation?.next_challenge;
+  const connectionLabels = {
+    connected_active: "自动运行 · Agent 活跃",
+    connected_idle: "自动运行 · Agent 已连接",
+    heartbeat_active: "自动运行 · Agent 活跃",
+    heartbeat_idle: "自动运行 · Agent 在线"
+  };
+  autopilotStatus.textContent = connectionLabels[automation?.connection_status]
+    || (automation?.autostart_enabled ? "自动运行 · 等待 Agent" : "自动运行 · 本次会话");
+  agentLevel.textContent = automation?.level?.label || "见微";
+  scoreEffect.textContent = [automation?.level?.description, automation?.score_effect].filter(Boolean).join(" ") || "积分正在调整推荐挑战";
+  behaviorHint.textContent = automation?.behavior_hint || "助手会为当前 Agent 准备合适的下一项挑战。";
+  currentChallenge.textContent = current ? `${current.icon} ${current.title}` : "暂时没有新挑战";
+  currentChallengeHint.textContent = current?.intent || "已经完成的结果仍会继续记录。";
+  currentChallengeProgress.style.width = current ? `${Math.min(100, current.current / current.target * 100)}%` : "0%";
+  currentChallengeCount.textContent = current ? `${current.current}/${current.target}` : "";
+  nextChallenge.textContent = next ? `${next.icon} ${next.title}` : "等待下一次诊断";
+  nextChallengeHint.textContent = next?.intent || "新的可靠证据出现后，助手会继续安排。";
+  challengeBoundaries.innerHTML = (current?.guardrails || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>保持用户指令、安全、项目规则和任务正确性的优先级。</li>";
+  operatingPriority.textContent = `优先级：${(automation?.operating_priority || []).join(" ＞ ")}`;
+  completedTasks.innerHTML = automation?.completed_tasks?.length
+    ? automation.completed_tasks.map((item) => `<article class="completed-task"><div><b>${escapeHtml(item.summary)}</b><em>${item.evidence_count} 条证据</em></div><small>${escapeHtml(item.agent_id)} · ${escapeHtml(item.task_type)} · ${new Date(item.completed_at).toLocaleString("zh-CN")}</small></article>`).join("")
+    : "<p class='empty'>Agent 完成任务后，结果与证据会自动记在这里。</p>";
 }
 
 function render(payload) {
@@ -127,9 +169,13 @@ function render(payload) {
   const unlocked = payload.catalog.filter((item) => item.awarded).length;
   collectionCount.textContent = `${unlocked}/${payload.catalog.length} 已解锁`;
   totalScore.textContent = `${payload.score} 积分`;
+  renderAutopilot(payload.automation);
   systemCount.textContent = payload.catalog.filter((item) => item.origin === "system_discovered").length;
+  suggestedCount.textContent = payload.catalog.filter((item) => item.origin === "system_suggested").length;
   humanCount.textContent = payload.catalog.filter((item) => item.origin === "human_created").length;
-  if (!payload.catalog.some((item) => item.origin === catalogOrigin) && payload.catalog.some((item) => item.origin === "human_created")) catalogOrigin = "human_created";
+  if (!payload.catalog.some((item) => item.origin === catalogOrigin)) {
+    catalogOrigin = ["system_suggested", "system_discovered", "human_created"].find((origin) => payload.catalog.some((item) => item.origin === origin)) || "system_suggested";
+  }
   renderCatalog();
   renderDiagnostic(payload.diagnostic);
   tracked.innerHTML = payload.tracked.length
@@ -144,7 +190,7 @@ function render(payload) {
     ? payload.awards.map((item) => `
       <article class="award">
         <div><b>${escapeHtml(item.icon)} ${escapeHtml(item.title)}</b><em>+${item.points} 分</em></div>
-        <p>${escapeHtml(item.human_feedback || "这项工作得到了人的认可。")}</p>
+        <p>${escapeHtml(item.human_feedback || "这项有证据的成果已经获得奖杯。")}</p>
         ${item.source_skill ? `<small>系统发现 · 来自 ${escapeHtml(item.source_skill)}</small>` : ""}
       </article>`).join("")
     : "<p class='empty'>最近还没有拿到新成就。</p>";
@@ -153,8 +199,10 @@ function render(payload) {
       <article>
         <div><b>${escapeHtml(item.icon)} ${escapeHtml(item.title)}</b><em>${escapeHtml(item.tier_label)} · ${item.points} 分</em></div>
         <p>${escapeHtml(item.summary)}</p>
-        <small>${escapeHtml(item.evidence_count)} 条证据 · 等你决定是否授予</small>
-        <div class="claim-actions"><button data-claim-id="${escapeHtml(item.claim_id)}" data-claim-decision="award">认可并授予</button><button data-claim-id="${escapeHtml(item.claim_id)}" data-claim-decision="reject">这次不授予</button></div>
+        <small>${item.current}/${item.target} · ${escapeHtml(item.evidence_count)} 条证据 · ${escapeHtml(item.eligibility_reason)}</small>
+        <details class="claim-evidence"><summary>查看证据</summary><ul>${item.evidence.map((evidence) => `<li><b>${escapeHtml(evidence.type)}</b><span>${escapeHtml(evidence.summary || evidence.ref)}</span><code>${escapeHtml(evidence.ref)}</code></li>`).join("") || "<li>没有可核验的证据。</li>"}</ul></details>
+        <label class="claim-feedback">给 Agent 的话<textarea data-claim-feedback="${escapeHtml(item.claim_id)}" maxlength="600">${escapeHtml(item.suggested_feedback)}</textarea></label>
+        <div class="claim-actions"><button data-claim-id="${escapeHtml(item.claim_id)}" data-claim-decision="award" ${item.eligible ? "" : "disabled"}>认可并授予</button><button data-claim-id="${escapeHtml(item.claim_id)}" data-claim-decision="reject">这次不授予</button></div>
       </article>`).join("")
     : "<p class='empty'>没有等待确认的成就申请。</p>";
   const awardSignature = payload.awards.map((item) => item.achievement_id).join("|");
@@ -173,8 +221,20 @@ pendingClaims.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-claim-id]");
   if (!button) return;
   button.disabled = true;
-  try { await window.agentCompanion.reviewClaim(button.dataset.claimId, button.dataset.claimDecision); }
-  catch { button.disabled = false; }
+  claimMessage.textContent = button.dataset.claimDecision === "award" ? "正在核对进度和证据…" : "正在记录这次判断…";
+  const feedback = pendingClaims.querySelector(`[data-claim-feedback="${CSS.escape(button.dataset.claimId)}"]`)?.value || "";
+  try {
+    await window.agentCompanion.reviewClaim(button.dataset.claimId, button.dataset.claimDecision, feedback);
+    claimMessage.textContent = button.dataset.claimDecision === "award" ? "成就已经授予，Agent 下次会看到这句话。" : "已经记录为这次不授予。";
+  } catch (error) {
+    const message = String(error?.message || "");
+    claimMessage.textContent = message.includes("achievement-not-earned")
+      ? "还没有达到成就目标，暂时不能授予。"
+      : message.includes("claim-evidence-insufficient")
+        ? "现有证据还不足以授予，请让 Agent 补充可核验记录。"
+        : `处理失败：${message || "请稍后重试"}`;
+    button.disabled = false;
+  }
 });
 
 pet.addEventListener("pointerdown", (event) => {

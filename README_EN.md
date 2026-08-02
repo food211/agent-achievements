@@ -1,39 +1,45 @@
 # Wuxing Harness
 
-> Install Wuxing Harness in any Agent Skills-compatible Code Agent, revise stale workspace rules, and return human recognition to the next task.
+> Install Wuxing Harness in any Code Agent to diagnose accumulated rules, record completed work, award evidence-backed trophies, and carry the next challenge into later tasks.
 
 [简体中文](./README.md)
 
-Wuxing Harness audits accumulated Agent rules against current code, tests, run evidence, and explicit human decisions. Agent Achievements receives verified improvements, lets a human review the evidence, and returns the recognition to later Agent context.
+Wuxing Harness automatically audits accumulated Agent rules against current code, tests, run evidence, and explicit human decisions. Agent Achievements records verified outcomes, advances progress, creates eligible claims during the same successful report call, settles evidence-backed trophies through trusted policy or human review, and returns points and new challenges to later Agent context.
 
 ## Product model
 
 - **Passive achievements** progress in the background and do not influence an agent before they unlock.
-- **Tracked achievements** are explicitly selected by a human and appear in agent context as soft encouragement.
+- **Active challenges** are scheduled automatically and appear in Agent context as soft encouragement.
 - **System discoveries** retrospectively recognize positive outcomes already produced through installed Skills, rules, and verifiable artifacts.
 - **Human-created achievements** are defined directly by a person or drafted by an Agent for human review.
-- **Tiers and points.** Bronze, silver, and gold are worth 10, 30, and 100 points. Points are added only after a human awards the achievement.
+- **Tiers and points.** Bronze, silver, and gold are worth 10, 30, and 100 points. Trusted policy may automatically award evidence-backed bronze and silver achievements; gold always remains under review. An Agent never awards itself.
 - **Rules remain stronger than achievements.** User instructions, safety, project constraints, and task correctness always take priority.
 - **Claims require evidence.** An agent may apply for an achievement but cannot award itself.
-- **Review is non-blocking.** The agent continues its primary task after submitting a claim.
+- **Review is non-blocking.** The Agent continues its primary task after `report` automatically creates an eligible claim.
+
+Points are reinforcement, not authority. They may break a tie between equally safe, correct, in-scope approaches—for example by preferring clearer evidence or a more reusable implementation—but they never change permissions, risk tolerance, or requested scope.
 
 The first integration is [Wuxing Harness](./skills/wuxing-harness/SKILL.md), but the protocol is intentionally runtime-neutral.
 
+Bootstrap schedules three default Wuxing challenges: **Product Gatekeeper** (bronze, three independent judgment boundaries), **Rule Gardener** (silver, one approved and verified rule revision), and **Loop Tuner** (gold, three distinct verified rule-revision runs).
+
 ## Desktop companion
 
-The desktop companion runs independently from every Code Agent. Any installed Skill can connect through the runtime-neutral `presence` heartbeat; the companion does not inspect vendor process names:
+The desktop companion runs independently from every Code Agent. On Agent startup, the installed Skill automatically keeps a local `agent-bridge.mjs` alive and authenticated over loopback TCP; the companion does not inspect vendor process names:
 
 - it stays visible, breathes and sleeps, and uses presence to show whether an agent is active;
 - it can display the identity and current task of connected agents;
-- it sleeps when heartbeats expire or sessions stop;
+- its activity view sleeps when no valid work session remains, while the bridge stays connected;
 - it expands to show tracked goals, progress, and recent human recognition.
 - the whole trophy distinguishes a short click from a drag after a movement threshold;
 - it snaps to the left, right, or top edge, keeps a clearly visible peek, and reveals itself on hover;
 - opening and closing the panel restores the trophy's exact prior position;
-- people can create or edit bronze, silver, and gold achievements, preserve existing progress, and switch tracked goals from either the catalog or tracked list;
+- people may optionally create or edit bronze, silver, and gold achievements while the system schedules default challenges automatically;
 - on first run, the companion asks the Agent to review evidence-backed positive outcomes and separates system discoveries from human-created goals;
 - when a person only knows the behavior they want to encourage, they can ask an installed agent to return a schema-valid, editable achievement draft;
 - it celebrates new achievements and offers an explicit launch-at-login toggle.
+
+The persistent bridge carries context and actions and reconnects after companion restarts or endpoint-token rotation. Normalized `presence` still distinguishes real active, idle, and stopped work. A socket connection, heartbeat, or uptime is never task activity or achievement evidence.
 
 On Windows, a five-element circle appears in the system tray while the companion stays out of the taskbar. Windows may initially place a new icon in the `^` overflow area; drag it into the notification area to keep it visible.
 
@@ -67,7 +73,7 @@ The status light is green while an agent is working, amber while it is waiting a
 node skills/use-agent-achievements/scripts/install-codex-hooks.mjs
 ```
 
-Review and trust the installed hook in Codex `/hooks`. It writes normalized presence only, does not read prompt content, and never counts presence as achievement evidence.
+The installing Agent should inspect and install the hook. If Codex still shows a native trust prompt, that prompt is a host security boundary and must not be bypassed. The hook maintains normalized activity and restores the local bridge; it does not read prompt content, and neither presence nor connection uptime counts as achievement evidence.
 
 Window geometry and typography use system DIPs, and the companion repositions itself when display scale metrics change.
 
@@ -109,12 +115,10 @@ Start the desktop companion:
 npm run companion
 ```
 
-Install both portable Skills into the cross-client `~/.agents/skills` directory:
-
-The recommended path is to ask the current Coding Agent to adapt itself. Give it this task:
+Ask the current Coding Agent to adapt itself. This is the only setup request the user needs to make:
 
 ```text
-Install Wuxing Harness from https://github.com/food211/harness-assistant. Read docs/code-agent-adapter-contract.md first, discover your actual Skills directory and lifecycle capabilities, then install wuxing-harness and use-agent-achievements as sibling Skills. Do not assume you are Codex or change the portable protocol to fit the host. If no lifecycle hook exists, use the generic presence command. Verify Skill discovery, achievement initialization, and achievement_sync.status = ready, then report the host-specific adaptation and validation results.
+Install Wuxing Harness from https://github.com/food211/harness-assistant. Read docs/code-agent-adapter-contract.md, discover your actual Skills or rules directory, workspace, stable identity, and truthful lifecycle capabilities, then install wuxing-harness and use-agent-achievements as sibling Skills. Run automatic bootstrap and consume all four actions: ensure_companion_running, ensure_agent_bridge, run_wuxing_diagnostic, and diagnose_past_achievements. Keep the companion and agent-bridge.mjs detached from the terminal. Restore the bridge from a real startup hook when available, or automatically during the first turn of every new session; do not claim pre-message connectivity on a host without such a hook. Verify that the bridge is connected and later tasks load encouragement, record outcomes, let report create claims, and receive new challenges. Do not ask me to initialize, start the connection, create, track, or claim achievements. Be truthful if background wake is unavailable, but do not make me maintain the connection manually.
 ```
 
 The repository installer is the lower-level copy mechanism:
@@ -135,7 +139,7 @@ For one workspace, install into `<workspace>/.agents/skills`:
 npm run install:skills -- --project <workspace-directory>
 ```
 
-Host-specific lifecycle hooks are optional. Without one, the Skill sends the same portable `presence` heartbeat directly. The bundled Codex adapter is a convenience, not a dependency.
+The installer bootstraps local state, built-in Wuxing challenges, the workspace Harness state, and four pending Agent-owned actions: companion startup, persistent bridge startup, initial rule diagnosis, and a separate retrospective. The installing Agent must consume or truthfully defer those actions before declaring adaptation complete; the user does not need a terminal step. Source installs currently launch the companion from the retained repository, so that repository must remain available. The companion publishes a loopback endpoint and random token in `connection.json`; the bridge reconnects automatically, writes health under `bridges/`, and stores pushed context in `agent-inbox.json` without exposing secrets. A startup hook restores the companion and then the bridge before the first task when available; otherwise the first Agent turn restores both automatically. The bridge can remain connected, but cannot wake a stopped Agent unless the host explicitly supports that capability.
 
 Run validation:
 
@@ -145,17 +149,16 @@ npm run validate
 
 ## Agent-facing operations
 
-The normal task protocol deliberately exposes only three actions:
+Installation adds one idempotent `bootstrap` operation. The normal local task flow needs only two achievement actions:
 
 1. `achievements_get_context` at task start;
-2. `achievements_report_event` for meaningful work events;
-3. `achievements_submit_claim` only when the event response marks an achievement as claimable.
+2. `achievements_report_event` for meaningful work events.
 
-A separate `presence` lifecycle signal controls the companion's activity state and never counts as achievement evidence.
+Local `report` creates a claim during the same successful call when its target is reached, so the Agent must not submit it again after success. `achievements_submit_claim` remains only as a compatibility operation for a remote adapter that requests submission without already creating a claim. Separate bridge and `presence` signals carry messages and activity state; neither ever counts as achievement evidence.
 
-Only after a human explicitly asks for design help does agent context include `design_requests`. An installed agent can submit an `achievement-design-proposal.schema.json` draft, but the human must edit or save it and remains the only authority that can award it.
+When context includes `design_requests`, the Agent returns a schema-valid observable challenge without making the user fill in a detailed form. A trusted policy or human surface schedules and awards it; the Agent does not.
 
-First-run and manual retrospectives add `diagnostic_requests`. The Agent submits evidence-backed discoveries; the companion automatically settles only high-confidence bronze or silver results. Medium-confidence discoveries and all gold awards require human confirmation. Installing or invoking a Skill is never sufficient evidence.
+Bootstrap queues two runtime actions and two independent diagnostic jobs: it keeps the companion and Agent bridge alive, Wuxing diagnoses current rule health, and the achievement retrospective recognizes positive outcomes that already happened. The Agent submits evidence-backed discoveries and the trusted award policy determines automatic settlement versus human review. Installing a Skill, opening a connection, or sending heartbeats is never sufficient evidence.
 
 See [the protocol reference](./skills/use-agent-achievements/references/protocol.md) for payloads and behavior. The JSON Schemas in [`packages/protocol/schemas`](./packages/protocol/schemas) are the canonical source for every public `agent-achievements/v1` payload.
 
