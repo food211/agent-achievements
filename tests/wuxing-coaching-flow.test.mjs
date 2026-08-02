@@ -15,6 +15,12 @@ function run(workspace, args) {
   return JSON.parse(result.stdout);
 }
 
+function runFailure(workspace, args) {
+  const result = spawnSync(process.execPath, [cli, ...args, "--workspace", workspace], { encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  return result.stderr;
+}
+
 async function answerFile(workspace, value) {
   const file = path.join(workspace, `answer-${Math.random().toString(36).slice(2)}.json`);
   await writeFile(file, JSON.stringify(value), "utf8");
@@ -28,7 +34,28 @@ test("coaching asks one saved question at a time and does not advance vague answ
   const started = run(workspace, ["coach-start"]);
   assert.equal(started.phase, "creator");
   assert.equal(started.current_question.step_id, "creator_inventory");
-  assert.equal(Object.keys(started.current_question).sort().join(","), "prompt,step_id");
+  assert.deepEqual(Object.keys(started.current_question).sort(), ["prework", "prompt", "step_id"]);
+  assert.match(started.current_question.prework, /Skill、模板、规则文件和提示词/);
+  assert.match(started.current_question.prompt, /先展示你找到的完整清单/);
+  assert.equal(started.prepared_context, null);
+  assert.match(started.instruction, /coach-observe/);
+
+  assert.match(runFailure(workspace, ["coach-answer", "--input", await answerFile(workspace, {
+    step_id: "creator_inventory",
+    answer: "我来从零列举。",
+    quality: "concrete"
+  })]), /coaching-prework-required/);
+
+  const observed = run(workspace, ["coach-observe", "--input", await answerFile(workspace, {
+    step_id: "creator_inventory",
+    summary: "找到两项实际生效的沉淀。",
+    candidates: [
+      { id: "skill-git-recap", label: "git-recap Skill", source_ref: "skills/git-recap/SKILL.md", evidence: "提交后生成结构化回顾。", confidence: "high" },
+      { id: "rule-data", label: "数据完整性规则", source_ref: "AGENTS.md", evidence: "约束数据写入边界。", confidence: "high" }
+    ]
+  })]);
+  assert.equal(observed.coaching.prepared_context.candidates.length, 2);
+  assert.match(observed.coaching.instruction, /confirms, corrects, excludes, or prioritizes/);
 
   const vague = run(workspace, ["coach-answer", "--input", await answerFile(workspace, {
     step_id: "creator_inventory",
@@ -40,7 +67,7 @@ test("coaching asks one saved question at a time and does not advance vague answ
 
   const concrete = run(workspace, ["coach-answer", "--input", await answerFile(workspace, {
     step_id: "creator_inventory",
-    answer: "我把每次提交后的总结固定成 git-recap Skill。",
+    answer: "清单准确，git-recap 和数据完整性规则都在使用。",
     quality: "concrete"
   })]);
   assert.equal(concrete.current_question.step_id, "creator_outdated");
@@ -53,6 +80,7 @@ test("coaching asks one saved question at a time and does not advance vague answ
   assert.equal(state.coaching.answers, undefined);
   const database = new DatabaseSync(path.join(workspace, ".wuxing-harness", "harness.db"), { readOnly: true });
   assert.deepEqual(database.prepare("SELECT quality FROM coaching_answers ORDER BY created_at, rowid").all().map((item) => item.quality), ["needs_followup", "concrete"]);
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM coaching_observations").get().count, 1);
   database.close();
 });
 
@@ -88,13 +116,17 @@ test("issue and decision inputs have strict portable schemas", async () => {
   const ajv = new Ajv2020({ allErrors: true });
   const issueSchema = JSON.parse(await readFile(path.resolve("skills/wuxing-harness/references/issue.schema.json"), "utf8"));
   const decisionSchema = JSON.parse(await readFile(path.resolve("skills/wuxing-harness/references/decision.schema.json"), "utf8"));
+  const observationSchema = JSON.parse(await readFile(path.resolve("skills/wuxing-harness/references/coaching-observation.schema.json"), "utf8"));
   const issueValid = ajv.compile(issueSchema);
   const decisionValid = ajv.compile(decisionSchema);
+  const observationValid = ajv.compile(observationSchema);
 
   assert.equal(issueValid({ summary: "批量改历史数据", details: "没有明确产品规则。", impact_scope: "high", reversibility: "costly", status: "waiting_human" }), true);
   assert.equal(issueValid({ summary: "缺字段", details: "没有影响范围。", reversibility: "costly", status: "observed" }), false);
   assert.equal(decisionValid({ issue_id: "issue-1", decision: "先问我", disposition: "create_rule" }), true);
   assert.equal(decisionValid({ decision: "Agent 自己猜", disposition: "invent" }), false);
+  assert.equal(observationValid({ step_id: "creator_inventory", summary: "找到一项", candidates: [{ id: "rule-1", label: "规则一", source_ref: "AGENTS.md", evidence: "文件中实际存在", confidence: "high" }] }), true);
+  assert.equal(observationValid({ step_id: "creator_inventory", summary: "没有来源", candidates: [{ id: "rule-1", label: "规则一", evidence: "猜测", confidence: "low" }] }), false);
 });
 
 test("coaching keeps creator, technical, and boundary phases in order", async () => {
@@ -105,6 +137,11 @@ test("coaching keeps creator, technical, and boundary phases in order", async ()
 
   while (current.current_question) {
     seen.push([current.phase, current.current_question.step_id]);
+    run(workspace, ["coach-observe", "--input", await answerFile(workspace, {
+      step_id: current.current_question.step_id,
+      summary: `完成预调查：${current.current_question.step_id}`,
+      candidates: [{ id: `candidate-${current.step_index}`, label: "候选", source_ref: "fixture", evidence: "测试证据", confidence: "high" }]
+    })]);
     current = run(workspace, ["coach-answer", "--input", await answerFile(workspace, {
       step_id: current.current_question.step_id,
       answer: `真实实例：${current.current_question.step_id}`,

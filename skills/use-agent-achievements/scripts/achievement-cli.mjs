@@ -657,7 +657,7 @@ async function bootstrap() {
         status: "pending",
         reason: "first_install",
         workspace,
-        instructions: "加载 wuxing-harness Skill，启动或恢复已保存的三段式规则诊断。每轮只问当前问题，先追到创作者的真实实例，再按顺序讨论入队判据、续跑、沉淀、推翻、指标与边界；不要直接用一次扫描代替访谈。诊断形成最小闭环、具体入队判据和不做清单后，再调用 action-complete。",
+        instructions: "加载 wuxing-harness Skill，启动或恢复三段式规则诊断。每一步先扫描规则、代码、历史和判断数据库，保存并展示带来源的候选；用户只需确认、纠正、排除或排序，不得让用户从零罗列 Agent 能读取的事实。按顺序完成创作者、入队判据、续跑、沉淀、推翻、指标与边界，形成最小闭环、具体入队判据和不做清单后再调用 action-complete。",
         guardrails: [...actionGuardrails, "不得擅自修改高优先级规则"],
         created_at: now
       });

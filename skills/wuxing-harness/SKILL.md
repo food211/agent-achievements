@@ -1,6 +1,6 @@
 ---
 name: wuxing-harness
-description: Automatically audit accumulated workspace rules after installation and during relevant Code Agent work; compare rules with current code, tests, artifacts, and run evidence; identify direct contradictions, repeated friction, and unauthorized automation; prepare evidence-backed replacements for human judgment; and report verified improvements for achievement recognition. Use for the initial bootstrap diagnosis, whenever an Agent changes or repeatedly struggles with workspace rules, or when a user asks to audit, prune, metabolize, or update AGENTS.md, CLAUDE.md, rules, Skills, templates, or prompts.
+description: Proactively audit accumulated workspace rules by scanning active Skills, templates, prompts, code, tests, history, and prior decisions before asking the user; present evidence-backed inventories and problem candidates for the user to confirm, correct, exclude, or prioritize; identify contradictions, repeated friction, and unauthorized automation; and report verified improvements for achievement recognition. Use for initial bootstrap diagnosis, repeated rule friction, or requests to audit, prune, metabolize, or update AGENTS.md, CLAUDE.md, rules, Skills, templates, or prompts.
 ---
 
 # 五行 Harness
@@ -14,8 +14,8 @@ description: Automatically audit accumulated workspace rules after installation 
 成就系统 `bootstrap` 返回 `run_wuxing_diagnostic` 时，当前安装 Agent 启动或恢复一次分阶段诊断，不要求用户再说“开始”。完整遵循 [references/coaching-flow.md](references/coaching-flow.md)：
 
 1. 初始化当前工作区的 Harness 状态。
-2. 在后台只读盘点实际生效的规则源，为访谈准备事实；不要直接把扫描结果当作用户的判断。
-3. 调用 `coach-start` 或 `coach-status`，每轮只问返回的当前问题。回答不具体就留在原问题追实例；不得提前跳到技术实现。
+2. 调用 `coach-start` 或 `coach-status` 取得当前步骤，先完成其中的 `prework`。扫描规则源、代码、测试、Git 历史和判断数据库，把候选项、路径和证据写入 `coach-observe`。
+3. 先向用户展示 `prepared_context`，再只问当前 `prompt`。让用户确认、纠正、排除或选择优先项；不得让用户从零回答 Agent 已能扫描到的事实，也不得提前跳到技术实现。
 4. 依次完成“开发创作者 → 技术判据 → 边界”三段，再结合代码证据形成待判断项或继续观察项。
 5. 涉及产品判断、高影响数据或自动化边界的内容只挂起这一项；其他独立任务继续运行。
 
@@ -75,6 +75,7 @@ CLI 会把合格结果转换为 `agent-achievements/v1` 事件并交给成就系
 node <skill-path>/scripts/harness-cli.mjs init --workspace <path>
 node <skill-path>/scripts/harness-cli.mjs coach-start --workspace <path>
 node <skill-path>/scripts/harness-cli.mjs coach-status --workspace <path>
+node <skill-path>/scripts/harness-cli.mjs coach-observe --workspace <path> --input <observation.json>
 node <skill-path>/scripts/harness-cli.mjs coach-answer --workspace <path> --input <answer.json>
 node <skill-path>/scripts/harness-cli.mjs issue-log --workspace <path> --input <issue.json>
 node <skill-path>/scripts/harness-cli.mjs decision-log --workspace <path> --input <decision.json>
@@ -85,7 +86,7 @@ node <skill-path>/scripts/harness-cli.mjs decide --finding <id> --decision appro
 node <skill-path>/scripts/harness-cli.mjs applied --finding <id> --input <application.json>
 ```
 
-`answer.json` 包含当前 `step_id`、用户原话 `answer`，以及 `quality: concrete|needs_followup`。访谈指针保存在 `.wuxing-harness/state.json`；逐步回答、Agent 遇到的问题和用户决策保存在 `.wuxing-harness/harness.db`。问题与决策的字段和记录时机见 [references/coaching-flow.md](references/coaching-flow.md)。脚本不自行修改规则文件。成就申请始终晚于人的批准和实际验证，不能反过来驱动审查结论。
+`observation.json` 遵守 [references/coaching-observation.schema.json](references/coaching-observation.schema.json)，保存 Agent 在提问前找到的候选和证据。`answer.json` 包含当前 `step_id`、用户原话 `answer`，以及 `quality: concrete|needs_followup`；用户确认一份有证据的候选清单也属于 `concrete`，不要求重新讲一个实例。访谈指针保存在 `.wuxing-harness/state.json`；预调查、逐步回答、Agent 遇到的问题和用户决策保存在 `.wuxing-harness/harness.db`。问题与决策的字段和记录时机见 [references/coaching-flow.md](references/coaching-flow.md)。脚本不自行修改规则文件。成就申请始终晚于人的批准和实际验证，不能反过来驱动审查结论。
 
 ## 给人的输出
 

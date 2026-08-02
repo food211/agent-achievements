@@ -22,20 +22,20 @@ const databasePath = path.join(home, "harness.db");
 const skillRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const COACHING_STEPS = [
-  { id: "creator_inventory", phase: "creator", prompt: "你和 AI 协作时，已经沉淀了哪些固定做法？请从 Skill、模板、规则或提示词里，先举一个你确实在用的例子。" },
-  { id: "creator_outdated", phase: "creator", prompt: "这些沉淀里，有没有一条已经可能过时、但你仍在使用？请说一个具体实例：你因为什么开始怀疑它？" },
-  { id: "creator_obsolete_guard", phase: "creator", prompt: "有没有一条规则原本是为了防住某个问题，而现在那个问题已经不存在或变了？请说规则原文、当时的问题和现在的变化。" },
-  { id: "creator_human_judgment", phase: "creator", prompt: "最近一次你在和 AI 协作时觉得“这个还是得我来定”是什么事？当时 AI 缺少的是什么判断？" },
-  { id: "admission_human", phase: "technical", prompt: "先只定最重要的入队判据：什么样的问题必须留给人判断？请用刚才的真实实例来划线，不要先追求通用公式。" },
-  { id: "admission_agent", phase: "technical", prompt: "反过来，哪些问题不该进入待判队列，应该让 Agent 自己决定？请给一个会被你视为“垃圾打断”的具体例子。" },
-  { id: "admission_failure", phase: "technical", prompt: "如果这道筛选错了，最可能怎样让你不再愿意清队列？你愿意接受的保守边界是什么？" },
-  { id: "resume_work", phase: "technical", prompt: "一条任务挂起后，哪些彼此独立的分支仍能继续？人回来判断后，最少需要保存哪些状态才能接着跑？" },
-  { id: "judgment_to_rule", phase: "technical", prompt: "人的一次判断怎样沉淀，才会让后续同类问题少问一次？请描述最小规则，以及至少满足什么条件才值得升级成规则。" },
-  { id: "overturn_rule", phase: "technical", prompt: "今天先选一种可实现的规则推翻信号。它是什么？触发后旧规则应直接覆盖、归档还是降权，为什么？" },
-  { id: "metrics", phase: "technical", prompt: "Demo 要记录三个证据：人介入/系统执行、一次判断解掉几个待判点、等待期间系统跑了多少。对你的工作流来说，一次“执行”和一次“解掉”分别怎样计数？" },
-  { id: "boundary_non_goals", phase: "boundary", prompt: "今天明确不做什么？请列出会让这个最小闭环失焦的具体功能。" },
-  { id: "boundary_unfit", phase: "boundary", prompt: "哪些五行映射你认为技术上做不了、没有价值，或目前根本套不上？卡住的地方请原样说，不需要替框架解释。" },
-  { id: "boundary_dependencies", phase: "boundary", prompt: "开始实现这个最小闭环前，你还需要队友或外部系统提供什么？没有就明确说没有。" }
+  { id: "creator_inventory", phase: "creator", prework: "扫描所有实际生效的 Skill、模板、规则文件和提示词；按类型列全名称、路径和一句可核验用途，合并重复项。", prompt: "先展示你找到的完整清单，再问：哪些已经停用、描述不准或遗漏？如果清单准确，用户只需确认。" },
+  { id: "creator_outdated", phase: "creator", prework: "把清单逐项与当前代码、测试、配置、Git 历史和问题数据库对照；只提出有矛盾、漂移或反复摩擦证据的候选，并附来源。", prompt: "先展示过时或漂移候选及证据，再问：哪些判断准确，哪一项最值得继续？不要让用户从零回忆。" },
+  { id: "creator_obsolete_guard", phase: "creator", prework: "从规则原文、相邻文档、提交历史和被保护代码推断建立目的；检查被防范的问题是否仍存在。目的找不到时明确写未知。", prompt: "先展示可能已经失去保护对象的规则，再请用户确认原始目的或排除候选。只询问仓库无法回答的缺口。" },
+  { id: "creator_human_judgment", phase: "creator", prework: "读取 issues、human_decisions、待判 finding 和可见的用户覆盖记录，列出 Agent 曾停下或被纠正的具体时刻。", prompt: "先展示这些真实时刻，再问：哪些确实属于必须由你决定，哪些其实 Agent 可以自己处理？" },
+  { id: "admission_human", phase: "technical", prework: "根据已确认实例，按影响范围、可逆性、是否已有明确产品规则和是否涉及外部或历史数据，拟一条最小入队判据并标注覆盖实例。", prompt: "给出拟定判据和它会拦住的实例，再请用户批准、收紧或放宽。" },
+  { id: "admission_agent", phase: "technical", prework: "从低影响、可逆、已有明确规则的任务中列出不应打断用户的反例，并说明 Agent 可自行验证的方式。", prompt: "展示不入队清单，再请用户指出其中是否仍有必须询问的例外。" },
+  { id: "admission_failure", phase: "technical", prework: "用当前判据回放已有问题记录，估算误报和漏报；列出最可能产生垃圾队列的类型。", prompt: "展示回放结果和建议的保守边界，再请用户只判断这个边界是否可接受。" },
+  { id: "resume_work", phase: "technical", prework: "检查当前 Agent 的任务、子任务和可持久化能力，提出可继续的独立分支及恢复所需的最小状态。", prompt: "展示续跑方案和宿主限制，再请用户纠正错误假设。" },
+  { id: "judgment_to_rule", phase: "technical", prework: "从问题指纹和历史决策中聚合同类判断，提出最小规则文本；标明出现次数、共通点和仍不应升级的孤例。", prompt: "展示候选规则及证据，再请用户决定继续观察、创建还是替换规则。" },
+  { id: "overturn_rule", phase: "technical", prework: "根据仓库现有测试、运行记录和版本控制能力，选出今天可实现的推翻信号，并比较覆盖、归档、降权的实际成本。", prompt: "先推荐一种信号和处置方式，再请用户批准或改选。" },
+  { id: "metrics", phase: "technical", prework: "依据 harness.db 和宿主任务记录，给出人介入、系统执行、一次判断解题数、等待期间执行数的可自动计算口径。", prompt: "展示计数公式及一个已有记录示例，再请用户确认是否符合她理解。" },
+  { id: "boundary_non_goals", phase: "boundary", prework: "从需求文档、仓库现状和本轮已确认目标中提取明确不做项，并补充会扩大 MVP 的候选。", prompt: "展示不做清单，再请用户删除误判或补充遗漏。" },
+  { id: "boundary_unfit", phase: "boundary", prework: "检查每个五行映射是否有真实机制和证据；把套不上、技术上不可行或收益不足的项原样列为 unmapped。", prompt: "展示不成立或存疑的映射，再请用户确认；不要要求用户替框架找解释。" },
+  { id: "boundary_dependencies", phase: "boundary", prework: "扫描未满足的接口、凭据、外部服务、队友交付和运行环境要求，区分真正阻塞与可自行完成。", prompt: "展示依赖清单；如果没有阻塞，只请用户确认，不要让用户重新列一遍。" }
 ];
 
 function emptyState() {
@@ -74,6 +74,15 @@ function openDatabase() {
       note TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS coaching_observations (
+      observation_id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      candidates_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS coaching_observations_step_idx ON coaching_observations(session_id, step_id, created_at);
     CREATE TABLE IF NOT EXISTS issues (
       issue_id TEXT PRIMARY KEY,
       fingerprint TEXT NOT NULL,
@@ -105,6 +114,44 @@ function recordCoachingAnswer(coaching, step, answer, now) {
   try {
     database.prepare("INSERT INTO coaching_answers (answer_id, session_id, step_id, phase, answer, quality, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
       .run(`answer_${randomUUID()}`, coaching.session_id, step.id, step.phase, String(answer.answer).trim(), answer.quality, String(answer.note || "").trim() || null, now);
+  } finally {
+    database.close();
+  }
+}
+
+function recordCoachingObservation(coaching, step, value) {
+  const summary = String(value.summary || "").trim();
+  if (!summary || !Array.isArray(value.candidates)) throw new Error("coaching-observation-invalid");
+  for (const candidate of value.candidates) {
+    if (!candidate.id || !candidate.label || !candidate.source_ref || !candidate.evidence || !["high", "medium", "low", "unknown"].includes(candidate.confidence)) {
+      throw new Error("coaching-candidate-invalid");
+    }
+  }
+  const database = openDatabase();
+  try {
+    const record = {
+      observation_id: value.observation_id || `observation_${randomUUID()}`,
+      session_id: coaching.session_id,
+      step_id: step.id,
+      summary,
+      candidates: value.candidates,
+      created_at: new Date().toISOString()
+    };
+    database.prepare("INSERT INTO coaching_observations (observation_id, session_id, step_id, summary, candidates_json, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(record.observation_id, record.session_id, record.step_id, record.summary, JSON.stringify(record.candidates), record.created_at);
+    return record;
+  } finally {
+    database.close();
+  }
+}
+
+function latestCoachingObservation(coaching, step) {
+  if (!coaching || !step) return null;
+  const database = openDatabase();
+  try {
+    const row = database.prepare("SELECT observation_id, summary, candidates_json, created_at FROM coaching_observations WHERE session_id = ? AND step_id = ? ORDER BY created_at DESC LIMIT 1")
+      .get(coaching.session_id, step.id);
+    return row ? { observation_id: row.observation_id, summary: row.summary, candidates: JSON.parse(row.candidates_json), created_at: row.created_at } : null;
   } finally {
     database.close();
   }
@@ -175,6 +222,7 @@ function currentCoachingStep(coaching) {
 
 function coachingOutput(coaching) {
   const step = currentCoachingStep(coaching);
+  const preparedContext = latestCoachingObservation(coaching, step);
   return {
     schema_version: VERSION,
     status: coaching.status,
@@ -182,9 +230,12 @@ function coachingOutput(coaching) {
     step_index: coaching.step_index,
     answer_count: coaching.answer_count || 0,
     total_steps: COACHING_STEPS.length,
-    current_question: step ? { step_id: step.id, prompt: step.prompt } : null,
+    current_question: step ? { step_id: step.id, prework: step.prework, prompt: step.prompt } : null,
+    prepared_context: preparedContext,
     instruction: step
-      ? "Ask only current_question. If the answer is vague or hypothetical, record it as needs_followup and ask for one concrete incident before advancing."
+      ? preparedContext
+        ? "Present prepared_context before asking only current_question.prompt. The user confirms, corrects, excludes, or prioritizes; never ask them to restate facts already found."
+        : "Complete current_question.prework and save it with coach-observe before asking the user. Do not ask an open-ended question that repository evidence can answer."
       : "Synthesize the runnable minimum loop, the concrete human-admission rule, and the explicit non-goal list from the recorded answers and code evidence.",
     deliverables: step ? [] : ["runnable_minimum_loop", "human_admission_rule", "non_goals"]
   };
@@ -264,7 +315,7 @@ function achievementEvent(finding, eventType, extraEvidence = []) {
       summary: eventType === "judgment.requested" ? `规则边界需要人判断：${finding.title}` : `规则已经按人的决定修改并验证：${finding.title}`
     },
     evidence: [...normalizedEvidence(finding.evidence), ...lifecycleEvidence, ...extraEvidence],
-    extensions: { finding_id: finding.finding_id, relation: finding.relation || "unmapped", human_decision_required: true }
+    extensions: { finding_id: finding.finding_id, relation: finding.relation || "unmapped", human_decision_required: true, workspace }
   };
 }
 
@@ -327,6 +378,7 @@ try {
     if (!state.coaching || state.coaching.status !== "in_progress") throw new Error("coaching-not-in-progress");
     const step = currentCoachingStep(state.coaching);
     if (!step || answer.step_id !== step.id) throw new Error("coaching-step-mismatch");
+    if (!latestCoachingObservation(state.coaching, step)) throw new Error("coaching-prework-required");
     if (!String(answer.answer || "").trim()) throw new Error("coaching-answer-required");
     if (!["concrete", "needs_followup"].includes(answer.quality)) throw new Error("coaching-quality-invalid");
     const now = new Date().toISOString();
@@ -337,6 +389,13 @@ try {
     state.coaching.updated_at = now;
     writeState(state);
     output(coachingOutput(state.coaching));
+  } else if (command === "coach-observe") {
+    const observation = loadJson(option("input"));
+    const state = readState();
+    if (!state.coaching || state.coaching.status !== "in_progress") throw new Error("coaching-not-in-progress");
+    const step = currentCoachingStep(state.coaching);
+    if (!step || observation.step_id !== step.id) throw new Error("coaching-step-mismatch");
+    output({ observation: recordCoachingObservation(state.coaching, step, observation), coaching: coachingOutput(state.coaching) });
   } else if (command === "issue-log") {
     output(logIssue(loadJson(option("input"))));
   } else if (command === "decision-log") {
@@ -347,6 +406,7 @@ try {
       const limit = Math.min(200, Math.max(1, Number.parseInt(option("limit", "50"), 10) || 50));
       output({
         database_path: databasePath,
+        coaching_observations: database.prepare("SELECT session_id, step_id, summary, candidates_json, created_at FROM coaching_observations ORDER BY created_at DESC LIMIT ?").all(limit).reverse().map((item) => ({ ...item, candidates: JSON.parse(item.candidates_json), candidates_json: undefined })),
         coaching_answers: database.prepare("SELECT session_id, step_id, phase, answer, quality, note, created_at FROM coaching_answers ORDER BY created_at DESC LIMIT ?").all(limit).reverse(),
         issues: database.prepare("SELECT i.*, (SELECT COUNT(*) FROM issues same WHERE same.fingerprint = i.fingerprint) AS occurrences FROM issues i ORDER BY i.created_at DESC LIMIT ?").all(limit),
         human_decisions: database.prepare("SELECT * FROM human_decisions ORDER BY created_at DESC LIMIT ?").all(limit)
@@ -406,7 +466,7 @@ try {
     writeState(state);
     output(application);
   } else {
-    throw new Error("usage: init | coach-start [--restart true] | coach-status | coach-answer --input file | issue-log --input file | decision-log --input file | history [--limit 50] | propose --input file | list | decide --finding id --decision approve|reject | applied --finding id --input file");
+    throw new Error("usage: init | coach-start [--restart true] | coach-status | coach-observe --input file | coach-answer --input file | issue-log --input file | decision-log --input file | history [--limit 50] | propose --input file | list | decide --finding id --decision approve|reject | applied --finding id --input file");
   }
 } catch (error) {
   process.stderr.write(`${error.message}\n`);
