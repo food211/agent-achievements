@@ -33,6 +33,11 @@ const alwaysOnTop = document.getElementById("alwaysOnTop");
 const companionTheme = document.getElementById("companionTheme");
 const diagnoseRepository = document.getElementById("diagnoseRepository");
 const diagnosisRequestStatus = document.getElementById("diagnosisRequestStatus");
+const agentConversation = document.getElementById("agentConversation");
+const agentConversationActivity = document.getElementById("agentConversationActivity");
+const agentMessages = document.getElementById("agentMessages");
+const agentReplyForm = document.getElementById("agentReplyForm");
+const agentReply = document.getElementById("agentReply");
 const openForge = document.getElementById("openForge");
 const closeForge = document.getElementById("closeForge");
 const forge = document.getElementById("forge");
@@ -176,6 +181,18 @@ function render(payload) {
   defaultAvatar.hidden = Boolean(payload.avatar?.dataUrl);
   if (payload.avatar?.dataUrl && customAvatar.src !== payload.avatar.dataUrl) customAvatar.src = payload.avatar.dataUrl;
   avatarHint.textContent = payload.avatar?.dataUrl ? "自定义形象 · Agent 也可以替你生成" : "默认五行助手";
+  const conversation = payload.agentConversation;
+  agentConversation.hidden = !conversation;
+  if (conversation) {
+    const busy = ["connecting", "streaming"].includes(conversation.status);
+    agentConversationActivity.textContent = conversation.error || conversation.activity || "";
+    agentReply.disabled = busy;
+    agentReplyForm.querySelector("button").disabled = busy;
+    const messages = [...(conversation.messages || [])];
+    if (conversation.status === "streaming" && conversation.output) messages.push({ role: "assistant", text: conversation.output, live: true });
+    agentMessages.innerHTML = messages.map((item) => `<article class="${item.role === "user" ? "from-user" : "from-agent"}${item.live ? " live" : ""}"><small>${item.role === "user" ? "你" : "诊断 Agent"}</small><p>${escapeHtml(item.text)}</p></article>`).join("");
+    agentMessages.scrollTop = agentMessages.scrollHeight;
+  }
   latestCatalog = payload.catalog;
   latestDesigns = payload.designs || [];
   const unlocked = payload.catalog.filter((item) => item.awarded).length;
@@ -321,6 +338,24 @@ diagnoseRepository.addEventListener("click", async () => {
         : `启动失败：${message || "请重试"}`;
   } finally {
     diagnoseRepository.disabled = false;
+  }
+});
+
+agentReplyForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const text = agentReply.value.trim();
+  if (!text) return;
+  agentReply.disabled = true;
+  agentReplyForm.querySelector("button").disabled = true;
+  diagnosisRequestStatus.textContent = "正在把你的回复发送给诊断 Agent…";
+  try {
+    await window.agentCompanion.sendAgentMessage(text);
+    agentReply.value = "";
+    diagnosisRequestStatus.textContent = "回复已送达，Agent 正在继续诊断。";
+  } catch (error) {
+    diagnosisRequestStatus.textContent = `发送失败：${error?.message || "请重试"}`;
+    agentReply.disabled = false;
+    agentReplyForm.querySelector("button").disabled = false;
   }
 });
 

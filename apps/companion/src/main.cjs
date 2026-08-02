@@ -20,6 +20,7 @@ const {
   updateTrackedIds
 } = require("./achievement-factory.cjs");
 const { createAgentConnectionServer } = require("./agent-connection-server.cjs");
+const { createCodexAcpClient } = require("./codex-acp-client.cjs");
 const {
   BRIDGE_RESTART_COOLDOWN_MS,
   BRIDGE_SWEEP_INTERVAL_MS,
@@ -53,6 +54,7 @@ app.setName(APP_DISPLAY_NAME);
 let window;
 let tray;
 let agentConnectionServer;
+let codexAcpClient;
 let expanded = false;
 let lastPayload = "";
 let quitting = false;
@@ -292,6 +294,24 @@ function activeSessions() {
       if (existing.agent_id === session.agent_id && existing.workspace === session.workspace) sessions.delete(sessionId);
     }
     sessions.set(session.session_id, session);
+  }
+  const knownWorkspaces = new Set([...sessions.values()].map((item) => item.workspace).filter(Boolean));
+  const adapters = readJson(STATE_PATH, emptyState()).adapters || [];
+  for (const adapter of [...adapters].reverse()) {
+    if (!adapter.workspace || knownWorkspaces.has(path.resolve(adapter.workspace)) || !fs.existsSync(adapter.workspace)) continue;
+    const workspace = path.resolve(adapter.workspace);
+    knownWorkspaces.add(workspace);
+    sessions.set(`known:${workspace}`, {
+      schema_version: "agent-achievements/v1",
+      session_id: `known-${createHash("sha256").update(workspace).digest("hex").slice(0, 16)}`,
+      agent_id: adapter.agent_id || "codex-local",
+      runtime: { id: "codex-acp" },
+      workspace,
+      status: codexAcpClient?.stateFor(workspace)?.status === "streaming" ? "active" : "idle",
+      observed_at: new Date(now).toISOString(),
+      expires_at: new Date(now + 365 * 24 * 60 * 60_000).toISOString(),
+      extensions: { transport: "companion_acp", connected: Boolean(codexAcpClient?.stateFor(workspace)), prompt_injection: "host_native" }
+    });
   }
   const unique = new Map();
   for (const session of sessions.values()) {
@@ -598,7 +618,7 @@ function currentPayload() {
       ...tier
     };
   });
-  return { dataHome: DATA_HOME, sessions, focusAgentId, focusWorkspace, tracked, awards, claims, catalog, designs, score: automation.score, automation, avatar: readAvatar(), diagnostic: latestDiagnostic ? {
+  return { dataHome: DATA_HOME, sessions, focusAgentId, focusWorkspace, tracked, awards, claims, catalog, designs, score: automation.score, automation, avatar: readAvatar(), agentConversation: codexAcpClient?.stateFor(focusWorkspace) || null, diagnostic: latestDiagnostic ? {
     request_id: latestDiagnostic.request_id,
     reason: latestDiagnostic.reason,
     status: latestDiagnostic.status,
@@ -836,11 +856,18 @@ async function requestWuxingDiagnostic() {
     release();
   }
   const repository = path.basename(focusSession.workspace);
-  const delivery = await agentConnectionServer.requestPrompt(focusSession.agent_id, focusSession.workspace, {
-    intent: "run_wuxing_diagnostic",
-    text: `请使用已安装的 wuxing-harness Skill，对当前仓库 ${repository} 启动或继续五行诊断。先读取当前仓库的规则、Skills、代码、历史和判断数据库，按三段式流程一次只问一个需要我判断的问题；不要跳到实现，也不要修改未经我确认的高优先级规则。`
-  });
+  const delivery = await codexAcpClient.runPrompt(
+    focusSession.workspace,
+    `请使用已安装的 wuxing-harness Skill，对当前仓库 ${repository} 启动或继续五行诊断。先读取当前仓库的规则、Skills、代码、历史和判断数据库，按三段式流程一次只问一个需要我判断的问题；不要跳到实现。当前是只读诊断会话，不要修改任何文件。把扫描结果和当前唯一需要我判断的问题直接回复在本会话中。`,
+    { displayText: `诊断当前仓库：${repository}` }
+  );
   return { action_id: queued.action.action_id, status: queued.action.status, created: queued.created, workspace: queued.action.workspace, target_session_status: focusSession.status, delivery };
+}
+
+async function sendAgentMessage(text) {
+  const focusSession = focusedSession();
+  if (!focusSession?.workspace) throw new Error("workspace-not-detected");
+  return codexAcpClient.runPrompt(focusSession.workspace, text);
 }
 
 function confirmDiagnosticDiscovery(requestId, discoveryId) {
@@ -963,7 +990,7 @@ function setAlwaysOnTop(enabled) {
 
 function refreshTrayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "诊断当前仓库", click: () => { try { requestWuxingDiagnostic(); } catch {} window.showInactive(); setExpanded(true); } },
+    { label: "诊断当前仓库", click: () => { void requestWuxingDiagnostic().catch(() => {}); window.showInactive(); setExpanded(true); } },
     { label: "显示桌面伙伴", click: () => { window.showInactive(); revealFromEdge(); } },
     { label: "打开成就目录", click: () => shell.openPath(DATA_HOME) },
     { label: "窗口置顶", type: "checkbox", checked: getAlwaysOnTop(), click: (item) => setAlwaysOnTop(item.checked) },
@@ -1021,6 +1048,7 @@ if (!hasSingleInstanceLock) {
     ensureAutostartOnFirstLaunch();
     agentConnectionServer = createAgentConnectionServer({ dataHome: DATA_HOME, getContext: connectionContext, onChanged: () => { lastPayload = ""; sync(); } });
     await agentConnectionServer.start();
+    codexAcpClient = createCodexAcpClient({ dataHome: DATA_HOME, onChanged: () => { lastPayload = ""; sync(); } });
     createWindow();
     createTray();
     ipcMain.on("companion:toggle", () => setExpanded(!expanded));
@@ -1042,6 +1070,7 @@ if (!hasSingleInstanceLock) {
     ipcMain.handle("companion:set-always-on-top", (_event, enabled) => setAlwaysOnTop(Boolean(enabled)));
     ipcMain.handle("companion:set-focus-workspace", (_event, agentId, workspace) => setFocusWorkspace(String(agentId), String(workspace)));
     ipcMain.handle("companion:request-wuxing-diagnostic", () => requestWuxingDiagnostic());
+    ipcMain.handle("companion:send-agent-message", (_event, text) => sendAgentMessage(String(text || "")));
     ipcMain.handle("companion:save-achievement", (_event, input) => saveAchievement(input));
     ipcMain.handle("companion:set-achievement-tracking", (_event, achievementId, enabled) => setAchievementTracking(String(achievementId), Boolean(enabled)));
     ipcMain.handle("companion:request-achievement-design", (_event, brief) => requestAchievementDesign(brief));
@@ -1053,6 +1082,6 @@ if (!hasSingleInstanceLock) {
     sync();
   });
   app.on("second-instance", () => { if (window) { window.showInactive(); setExpanded(true); } });
-  app.on("before-quit", () => { quitting = true; agentConnectionServer?.stop(); writeCompanionStatus("stopped", true); });
+  app.on("before-quit", () => { quitting = true; codexAcpClient?.stop(); agentConnectionServer?.stop(); writeCompanionStatus("stopped", true); });
   app.on("window-all-closed", (event) => event.preventDefault());
 }

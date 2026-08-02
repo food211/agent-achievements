@@ -184,7 +184,7 @@ async function activate(targetRoot, workspace, identity, capabilities, environme
     immediate_handoff: withAchievements ? null : {
       kind: "wuxing_rule_audit",
       required_in_current_turn: true,
-      instruction: "立即加载 wuxing-harness，扫描规则、代码、测试和运行记录，找出语义漂移、适用场景错误和 AI 自行补齐规则空白三类候选；带证据向用户逐条请求批准。不要创建待办，不要抛出设计问卷。"
+      instruction: "立即加载 wuxing-harness，并完全按 SKILL.md 的自然对话流程工作：先扫描真实规则，关注语义漂移、场景错误和自动化空白，再带着证据一次推进一条陈旧规则。用户可以修改筛选和提问方式；不要创建待办，不要用脚本状态机驱动对话，也不要把仓库调查或整套问卷丢给用户。只有形成明确处置后才按 schema 落库。"
     },
     agent_next_actions: agentNextActions,
     user_next_actions: []

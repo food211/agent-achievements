@@ -25,6 +25,11 @@
         <button class="primary-action achievement-action" id="openForge"><span>✦</span>编辑成就</button>
       </nav>
       <p class="diagnosis-request-status no-drag" id="diagnosisRequestStatus" role="status"></p>
+      <section class="agent-conversation no-drag" id="agentConversation" hidden>
+        <div class="agent-conversation-head"><b>与诊断 Agent 对话</b><small id="agentConversationActivity"></small></div>
+        <div class="agent-messages" id="agentMessages" aria-live="polite"></div>
+        <form id="agentReplyForm"><textarea id="agentReply" maxlength="8000" placeholder="回答 Agent 的问题，继续这次诊断"></textarea><button type="submit">发送</button></form>
+      </section>
       <div class="achievement-head">
         <div><small>ACHIEVEMENT COLLECTION</small><b>成就图鉴</b><span><i id="collectionCount">0 项成就</i> · <i id="totalScore">0 积分</i></span></div>
       </div>
