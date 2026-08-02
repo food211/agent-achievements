@@ -1,49 +1,27 @@
 import "./styles.css";
 
-const DEFAULT_SAMPLE = "我们总以为，创作需要更完整的方法、更准确的表达和更稳定的输出。只要不断优化流程，内容自然会变得更好。但真正重要的，也许还是保持耐心，相信时间会给出答案。";
-const ACTIONS = [
-  ["water", "引水", "加一个真实现场"],
-  ["wood", "生枝", "换个角度往下写"],
-  ["fire", "点火", "早点把话说出来"],
-  ["earth", "落土", "用事实换掉空话"],
-  ["metal", "修枝", "删到只剩需要的"]
-];
+const labels = {
+  direct_conflict: ["直接冲突", "一份直接证据就该改"],
+  repeated_friction: ["反复阻碍", "多次出现后再提"],
+  automation_boundary: ["先停下来", "影响数据，交给人定"]
+};
+const relationLabels = {
+  fire_overcomes_metal: "火克金",
+  metal_overcomes_wood: "金克木",
+  water_overcomes_fire: "水克火"
+};
 
-const sourceText = document.getElementById("sourceText");
-const diagnoseButton = document.getElementById("diagnose");
-const message = document.getElementById("message");
-const diagnosis = document.getElementById("diagnosis");
-const actions = document.getElementById("actions");
-const terrain = document.getElementById("terrain");
-const revision = document.getElementById("revision");
-const judgment = document.getElementById("judgment");
-const learnedJudgment = document.getElementById("learnedJudgment");
-const accept = document.getElementById("accept");
-const reject = document.getElementById("reject");
-const judgmentActions = document.getElementById("judgmentActions");
-const judgmentResult = document.getElementById("judgmentResult");
-const preferences = document.getElementById("preferences");
 const themeToggle = document.getElementById("themeToggle");
-let currentSession = null;
-let currentIntervention = null;
+const metrics = document.getElementById("metrics");
+const findingList = document.getElementById("findingList");
+const detailPanel = document.getElementById("detailPanel");
+const resetDemo = document.getElementById("resetDemo");
+let findings = [];
+let selectedId = null;
 
-sourceText.value = DEFAULT_SAMPLE;
-actions.innerHTML = ACTIONS.map(([id, label, meaning]) => `<button data-action="${id}"><b>${label}</b><small>${meaning}</small></button>`).join("");
-
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  themeToggle.textContent = theme === "dark" ? "浅色" : "深色";
-  themeToggle.setAttribute("aria-label", `切换到${theme === "dark" ? "浅色" : "深色"}主题`);
-  document.querySelector('meta[name="theme-color"]').content = theme === "dark" ? "#111b18" : "#ebe7dc";
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
 }
-
-const savedTheme = localStorage.getItem("wuxing-theme");
-applyTheme(savedTheme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
-themeToggle.addEventListener("click", () => {
-  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-  localStorage.setItem("wuxing-theme", next);
-  applyTheme(next);
-});
 
 async function api(path, options = {}) {
   const response = await fetch(path, { headers: { "content-type": "application/json" }, ...options });
@@ -52,81 +30,97 @@ async function api(path, options = {}) {
   return body;
 }
 
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem("wuxing-harness-theme", theme);
+  themeToggle.textContent = theme === "dark" ? "浅色" : "深色";
+  document.querySelector('meta[name="theme-color"]').content = theme === "dark" ? "#15201c" : "#ebe8de";
 }
 
-function setBusy(button, busy, text) {
-  button.disabled = busy;
-  if (text) button.dataset.original ||= button.textContent;
-  button.textContent = busy ? text : button.dataset.original || button.textContent;
+applyTheme(localStorage.getItem("wuxing-harness-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+themeToggle.addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
+
+function renderMetrics(value) {
+  metrics.innerHTML = [
+    [value.rules_examined, "条规则被对照"],
+    [value.findings_raised, "项问题带着证据"],
+    [value.pending_decisions, "项等你判断"]
+  ].map(([number, label]) => `<div><strong>${number}</strong><span>${label}</span></div>`).join("");
 }
 
-async function loadPreferences() {
-  const data = await api("/api/wuxing/preferences");
-  preferences.innerHTML = data.preferences.length ? data.preferences.map((item) => `<article><span>${item.status === "stable" ? "已经记住" : "刚记下"}</span><b>${escapeHtml(item.statement)}</b><small>${escapeHtml(ACTIONS.find(([id]) => id === item.action)?.[1] || item.action)} · 第 ${item.confirmations} 次</small></article>`).join("") : "<p>你收下的判断会先放在这里。相似的选择多了，我才会把它当成偏好。</p>";
+function renderList() {
+  findingList.innerHTML = findings.map((finding, index) => {
+    const [kind] = labels[finding.kind];
+    const status = finding.status === "applied" ? "已覆盖" : finding.status === "rejected" ? "已保留" : "待判断";
+    return `<button class="finding-item ${selectedId === finding.finding_id ? "selected" : ""} ${finding.status}" data-id="${escapeHtml(finding.finding_id)}">
+      <span class="finding-index">0${index + 1}</span>
+      <span><small>${kind} · ${relationLabels[finding.relation]}</small><b>${escapeHtml(finding.title)}</b><em>${status}</em></span>
+    </button>`;
+  }).join("");
 }
 
-function renderDiagnosis(value) {
-  terrain.dataset.focus = value.recommended_action || "none";
-  if (value.uncertainty) {
-    diagnosis.className = "diagnosis uncertain";
-    diagnosis.innerHTML = `<b>${escapeHtml(value.summary)}</b><p>${escapeHtml(value.uncertainty)}</p>`;
-  } else {
-    diagnosis.className = "diagnosis";
-    diagnosis.innerHTML = `<small>我看到的是</small><h2>${escapeHtml(value.summary)}</h2><p>${escapeHtml(value.explanation)}</p><ul>${value.evidence.map((item) => `<li>“${escapeHtml(item)}”</li>`).join("")}</ul><strong>${escapeHtml(value.why_this_action)}</strong>`;
-  }
-  for (const button of actions.querySelectorAll("button")) {
-    button.disabled = Boolean(value.uncertainty);
-    button.classList.toggle("recommended", button.dataset.action === value.recommended_action);
-  }
+function renderDetail() {
+  const finding = findings.find((item) => item.finding_id === selectedId);
+  if (!finding) return;
+  const [kind, threshold] = labels[finding.kind];
+  const settled = finding.status !== "pending";
+  detailPanel.innerHTML = `
+    <header class="detail-head"><div><span class="kind-tag">${kind}</span><span class="relation-tag">${relationLabels[finding.relation]}</span><h2>${escapeHtml(finding.title)}</h2><p>${threshold}</p></div><span class="status ${finding.status}">${finding.status === "applied" ? "旧规则已覆盖" : finding.status === "rejected" ? "这次不改" : "等你判断"}</span></header>
+    <section class="rule-block"><small>现在的规则 · ${escapeHtml(finding.rule.path)}</small><blockquote>${escapeHtml(finding.rule.text)}</blockquote><p>当初是为了：${escapeHtml(finding.rule.rationale)}</p></section>
+    <div class="expectation-grid"><section><small>原本希望</small><p>${escapeHtml(finding.expected_outcome)}</p></section><section><small>实际发生</small><p>${escapeHtml(finding.observed_outcome)}</p></section></div>
+    <section class="evidence-block"><small>触发 ${finding.trigger_count} 次 · ${finding.contradiction_count} 次结果与预期相反 · 证据 ${finding.evidence.length} 条</small>${finding.evidence.map((item) => `<article><span>${escapeHtml(item.type)}</span><div><b>${escapeHtml(item.summary)}</b><code>${escapeHtml(item.ref)}</code></div></article>`).join("")}</section>
+    <section class="proposal-block"><small>建议直接替换成</small><blockquote>${escapeHtml(finding.proposal.replacement)}</blockquote><div><p><b>为什么改</b>${escapeHtml(finding.proposal.reason)}</p><p><b>影响哪里</b>${escapeHtml(finding.proposal.impact_scope)}</p><p><b>怎么恢复</b>${escapeHtml(finding.proposal.reversibility)}</p></div></section>
+    ${settled ? `<p class="settled-note">${finding.status === "applied" ? "你批准了这项修改。旧规则已经被新文本覆盖，历史留在版本控制里。" : "你保留了原规则。这项发现仍在记录中，不会悄悄变成修改。"}</p>` : `<div class="decision-bar"><button class="approve" data-decision="approve">批准并覆盖</button><button data-decision="reject">先不改</button><small>Harness 不会替你做这个判断</small></div>`}
+  `;
 }
 
-diagnoseButton.addEventListener("click", async () => {
-  setBusy(diagnoseButton, true, "我在读…");
-  message.textContent = "";
-  judgment.hidden = true;
-  judgmentActions.hidden = false;
-  judgmentResult.textContent = "";
-  revision.className = "revision empty-state";
-  revision.innerHTML = "<b>我在读这段文字</b><p>先找出它卡在哪，再动笔。</p>";
-  try {
-    currentSession = await api("/api/wuxing/sessions", { method: "POST", body: JSON.stringify({ text: sourceText.value }) });
-    currentIntervention = null;
-    renderDiagnosis(currentSession.diagnosis);
-    revision.innerHTML = "<b>选一个动作</b><p>我标出了最想先试的那个，你也可以选别的。</p>";
-  } catch (error) {
-    message.textContent = error.message === "text-too-short" ? "再多写一点，我现在还看不出它卡在哪。" : "这次没读出来，再试一次。";
-  } finally { setBusy(diagnoseButton, false); }
+async function load() {
+  const [findingData, metricData] = await Promise.all([api("/api/wuxing/findings"), api("/api/wuxing/metrics")]);
+  findings = findingData.findings;
+  selectedId = findings.find((item) => item.status === "pending")?.finding_id || findings[0]?.finding_id || null;
+  renderMetrics(metricData);
+  renderList();
+  renderDetail();
+}
+
+findingList.addEventListener("click", (event) => {
+  const item = event.target.closest("[data-id]");
+  if (!item) return;
+  selectedId = item.dataset.id;
+  renderList();
+  renderDetail();
 });
 
-actions.addEventListener("click", async (event) => {
-  const button = event.target.closest("button[data-action]");
-  if (!button || !currentSession) return;
-  for (const item of actions.querySelectorAll("button")) item.classList.toggle("selected", item === button);
-  terrain.dataset.focus = button.dataset.action;
-  setBusy(button, true, "改稿中…");
+detailPanel.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-decision]");
+  if (!button || !selectedId) return;
+  button.disabled = true;
   try {
-    currentIntervention = await api(`/api/wuxing/sessions/${encodeURIComponent(currentSession.session_id)}/interventions`, { method: "POST", body: JSON.stringify({ action: button.dataset.action }) });
-    revision.className = "revision";
-    revision.innerHTML = `<small>${escapeHtml(currentIntervention.action_label)}之后</small><p>${escapeHtml(currentIntervention.text)}</p><strong>${escapeHtml(currentIntervention.exchange)}</strong>`;
-    learnedJudgment.textContent = currentIntervention.learned_judgment;
-    judgment.hidden = false;
-  } catch { message.textContent = "这次没改出来，再试一次。"; }
-  finally { setBusy(button, false); }
+    const result = await api(`/api/wuxing/findings/${encodeURIComponent(selectedId)}/decision`, { method: "POST", body: JSON.stringify({ decision: button.dataset.decision }) });
+    const current = findings.find((item) => item.finding_id === selectedId);
+    current.status = result.finding.status === "approved" ? "applied" : result.finding.status;
+    renderMetrics(result.metrics);
+    renderList();
+    renderDetail();
+  } catch {
+    button.disabled = false;
+  }
 });
 
-async function decide(accepted) {
-  if (!currentSession || !currentIntervention) return;
+resetDemo.addEventListener("click", async () => {
+  resetDemo.disabled = true;
   try {
-    await api(`/api/wuxing/sessions/${encodeURIComponent(currentSession.session_id)}/judgment`, { method: "POST", body: JSON.stringify({ accepted, feedback: accepted ? "" : "本次调控没有更接近我" }) });
-    judgmentActions.hidden = true;
-    judgmentResult.className = accepted ? "judgment-result settled" : "judgment-result rejected";
-    judgmentResult.textContent = accepted ? "先放在这里，下次碰到相似的文字再看。" : "好，这次不算。";
-    await loadPreferences();
-  } catch { message.textContent = "这次没记住，再试一次。"; }
-}
+    const data = await api("/api/wuxing/demo/reset", { method: "POST", body: "{}" });
+    findings = data.findings;
+    selectedId = findings[0]?.finding_id || null;
+    renderMetrics(data.metrics);
+    renderList();
+    renderDetail();
+  } finally {
+    resetDemo.disabled = false;
+  }
+});
 
-accept.addEventListener("click", () => decide(true));
-reject.addEventListener("click", () => decide(false));
-loadPreferences().catch(() => { preferences.innerHTML = "<p>我还没读到以前的偏好。</p>"; });
+load().catch(() => {
+  detailPanel.innerHTML = '<div class="empty-state"><b>没有连上 Harness</b><p>请先启动本地服务，再刷新这里。</p></div>';
+});

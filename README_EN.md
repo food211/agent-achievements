@@ -1,6 +1,6 @@
 # Agent Achievements
 
-> This monorepo contains two independent systems that can interoperate through protocols: Agent Achievements, and the Wuxing creation-control core and assistant.
+> This monorepo contains two independent systems that can interoperate through protocols: Agent Achievements, and Wuxing Harness for auditing Agent rules.
 
 [简体中文](./README.md)
 
@@ -19,7 +19,7 @@ Agent Achievements is an open achievement layer for AI agents. Third-party syste
 - **Claims require evidence.** An agent may apply for an achievement but cannot award itself.
 - **Review is non-blocking.** The agent continues its primary task after submitting a claim.
 
-The first integration is [Wuxing Agent Harness](./examples/wuxing-harness/README.md), but the protocol is intentionally runtime-neutral.
+The first integration is [Wuxing Harness](./skills/wuxing-harness/SKILL.md), but the protocol is intentionally runtime-neutral.
 
 ## Desktop companion
 
@@ -41,11 +41,17 @@ On Windows, a dedicated high-contrast living-trophy icon appears in the system t
 
 The companion stays on top by default. You can disable or re-enable this behavior from Appearance & presence or the tray menu; the choice is persisted locally.
 
-The companion can also act as the desktop entry point for Wuxing creation control. “Start tuning” opens the exact same SPA used on the web; the desktop shell only adds dragging, always-on-top, snapping, and tray integration.
+The companion is also the desktop entry point for Wuxing Harness. “Audit rules” opens the public demonstration; the desktop shell adds dragging, always-on-top, snapping, and tray integration. Set `WUXING_ASSISTANT_URL=http://127.0.0.1:4318` to use the local service during development.
 
-## Wuxing creation control
+## Wuxing Harness
 
-The Wuxing system describes the current draft rather than the author's personality. It supports five explicit interventions and conservatively promotes repeated accepted judgments from candidate to stable preferences.
+Agent rules tend to accumulate. Wuxing Harness audits those rules against current code, tests, run evidence, and explicit human decisions. Every proposed replacement includes evidence, impact scope, and reversibility. It waits for human approval before overwriting the old rule.
+
+The current implementation covers three control relations:
+
+- **Fire over Metal:** execution results overturn an old rule. A direct contradiction is raised once; recurring friction needs repeated evidence.
+- **Metal over Wood:** the human approves or rejects a proposed branch.
+- **Water over Fire:** new unattended automation, scheduled work, or external data synchronization pauses for human judgment.
 
 ```bash
 npm install
@@ -53,7 +59,9 @@ npm run build --workspace=@agent-achievements/wuxing-assistant
 npm run wuxing
 ```
 
-Open `http://127.0.0.1:4318`. One process serves both the SPA and `/api/wuxing/*`. Real model calls must run in `apps/wuxing-service`; keep API keys in OpenDeploy Secrets or local server environment variables, never in `VITE_*` frontend variables. The Anthropic provider defaults to `claude-opus-5`.
+Open `http://127.0.0.1:4318`. The demo walks through three evidence-backed rule problems from a real workspace. The public SPA demonstrates the same review loop without reading local files or requiring a model API key.
+
+The current build does not claim a complete non-blocking task queue, Wood over Earth, Earth over Water, or prosperity-and-decline diagnostics.
 
 The status light is green while an agent is working, amber while it is waiting after a turn, and gray when no valid session remains. Codex can keep this state current through its official lifecycle hooks:
 
@@ -83,6 +91,7 @@ agent-achievements/
 ├── apps/companion/                    # Desktop companion following agent presence
 ├── packages/protocol/                 # Canonical JSON Schemas
 ├── skills/use-agent-achievements/     # Installable agent Skill
+├── skills/wuxing-harness/              # Installable rule-audit Skill
 ├── examples/wuxing-harness/           # Third-party integration example
 └── tests/                              # Schema conformance tests
 ```

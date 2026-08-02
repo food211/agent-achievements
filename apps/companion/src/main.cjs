@@ -18,8 +18,8 @@ const EDGE_PEEK = 30;
 const AVATAR_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "svg"];
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 const TRAY_ICON_PATH = path.join(__dirname, process.platform === "win32" ? "tray-icon.ico" : "tray-icon.png");
-const APP_DISPLAY_NAME = "五行创作助手";
-const WUXING_ASSISTANT_URL = process.env.WUXING_ASSISTANT_URL || "http://127.0.0.1:4318";
+const APP_DISPLAY_NAME = "五行 Harness 助手";
+const WUXING_ASSISTANT_URL = process.env.WUXING_ASSISTANT_URL || "https://wuxing-creation-harness.misakiff14.chatgpt.site";
 
 app.setName(APP_DISPLAY_NAME);
 
@@ -465,7 +465,7 @@ function openWuxingAssistant() {
 
 function refreshTrayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "打开五行创作", click: openWuxingAssistant },
+    { label: "打开规则体检", click: openWuxingAssistant },
     { label: "显示桌面伙伴", click: () => { window.showInactive(); revealFromEdge(); } },
     { label: "打开成就目录", click: () => shell.openPath(DATA_HOME) },
     { label: "窗口置顶", type: "checkbox", checked: getAlwaysOnTop(), click: (item) => setAlwaysOnTop(item.checked) },

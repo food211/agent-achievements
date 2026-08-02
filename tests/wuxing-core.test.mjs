@@ -1,77 +1,89 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 import test from "node:test";
-import { AnthropicWritingProvider, DEFAULT_SAMPLE, MemoryWuxingStore, WuxingEngine } from "../packages/wuxing-core/src/index.js";
+import Ajv2020 from "ajv/dist/2020.js";
+import {
+  DEMO_FINDINGS,
+  DEMO_INVENTORY,
+  MemoryHarnessStore,
+  WuxingHarnessEngine,
+  validateFinding
+} from "../packages/wuxing-core/src/index.js";
 
 function testEngine() {
   let sequence = 0;
-  return new WuxingEngine({
-    store: new MemoryWuxingStore(),
+  return new WuxingHarnessEngine({
+    store: new MemoryHarnessStore(),
     id: () => String(++sequence),
     now: () => new Date("2026-08-02T01:00:00+08:00")
   });
 }
 
-test("the wuxing core completes diagnosis, intervention, and conservative preference settlement", async () => {
+test("the harness raises evidence-backed findings and waits for human judgment", () => {
   const engine = testEngine();
-  const session = await engine.start(DEFAULT_SAMPLE);
-  assert.equal(session.diagnosis.summary, "水弱，土滞");
-  assert.equal(session.diagnosis.recommended_action, "water");
-  assert.equal(session.diagnosis.evidence.length, 2);
+  const audit = engine.startAudit({ workspace: "voice-md", inventory: DEMO_INVENTORY });
+  const finding = engine.addFinding(audit.audit_id, DEMO_FINDINGS[0]);
+  engine.finishAudit(audit.audit_id);
 
-  const revision = await engine.intervene(session.session_id, "water");
-  assert.match(revision.text, /昨晚十一点/);
-  assert.equal(revision.action_label, "引水");
-
-  const settled = engine.judge(session.session_id, { accepted: true });
-  assert.equal(settled.status, "accepted");
-  assert.equal(engine.listPreferences()[0].status, "candidate");
-  assert.equal(engine.listPreferences()[0].confirmations, 1);
+  assert.equal(finding.relation, "fire_overcomes_metal");
+  assert.equal(finding.status, "pending");
+  assert.equal(engine.getMetrics().pending_decisions, 1);
+  assert.equal(engine.listEvents().at(-1).event_type, "audit.completed");
 });
 
-test("an accepted judgment is visible to the next generation without becoming a stable rule", async () => {
-  const engine = testEngine();
-  const first = await engine.start(DEFAULT_SAMPLE);
-  await engine.intervene(first.session_id, "water");
-  engine.judge(first.session_id, { accepted: true });
+test("direct contradictions need one evidence item but repeated friction needs several", () => {
+  const direct = structuredClone(DEMO_FINDINGS[0]);
+  direct.evidence = direct.evidence.slice(0, 1);
+  assert.equal(validateFinding(direct).kind, "direct_conflict");
 
-  const second = await engine.start(DEFAULT_SAMPLE);
-  assert.equal(second.preference_context.length, 1);
-  const revision = await engine.intervene(second.session_id, "water");
-  assert.deepEqual(revision.preference_context, ["你更在意真实细节带来的力量，不要用漂亮形容词替代它。"]);
-  engine.judge(second.session_id, { accepted: true });
-  assert.equal(engine.listPreferences()[0].status, "stable");
-  assert.equal(engine.listPreferences()[0].confirmations, 2);
+  const friction = structuredClone(DEMO_FINDINGS[1]);
+  friction.evidence = friction.evidence.slice(0, 1);
+  assert.throws(() => validateFinding(friction), /finding-evidence-insufficient/);
 });
 
-test("rejected judgments remain events and never become preferences", async () => {
+test("approved findings can be applied by overwriting the old rule", () => {
   const engine = testEngine();
-  const session = await engine.start(DEFAULT_SAMPLE);
-  await engine.intervene(session.session_id, "metal");
-  engine.judge(session.session_id, { accepted: false, feedback: "删得太狠" });
-  assert.equal(engine.listPreferences().length, 0);
-  assert.equal(engine.listEvents().at(-1).event_type, "preference.rejected");
-});
+  const audit = engine.startAudit({ workspace: "voice-md", inventory: DEMO_INVENTORY });
+  const finding = engine.addFinding(audit.audit_id, DEMO_FINDINGS[0]);
+  const result = engine.decide(finding.finding_id, { decision: "approve", note: "代码和测试一致" });
+  assert.equal(result.finding.status, "approved");
 
-test("the preset provider refuses to invent a diagnosis for unmatched text", async () => {
-  const engine = testEngine();
-  const session = await engine.start("这是一段长度足够、但没有预置诊断证据的临时文本，因此系统必须明确表示无法判断。" );
-  assert.ok(session.diagnosis.uncertainty);
-  await assert.rejects(() => engine.intervene(session.session_id, "water"), /diagnosis-uncertain/);
-});
-
-test("the Anthropic provider keeps the key server-side and defaults to Claude Opus 5", async () => {
-  let request;
-  const provider = new AnthropicWritingProvider({
-    baseUrl: "https://models.example.test",
-    authToken: "private-token",
-    fetchImpl: async (url, options) => {
-      request = { url, options, body: JSON.parse(options.body) };
-      return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify({ summary: "水弱", evidence: ["一段证据"], explanation: "缺少现场", recommended_action: "water", why_this_action: "补现场", uncertainty: null, terrain: { water: "weak", wood: "balanced", fire: "balanced", earth: "balanced", metal: "balanced" } }) }] }), { status: 200, headers: { "content-type": "application/json" } });
-    }
+  const application = engine.markApplied(finding.finding_id, {
+    path: finding.rule.path,
+    before: finding.rule.text,
+    after: finding.proposal.replacement,
+    validation: ["npm test"]
   });
-  await provider.diagnose({ text: DEFAULT_SAMPLE, preferences: [] });
-  assert.equal(request.url, "https://models.example.test/v1/messages");
-  assert.equal(request.body.model, "claude-opus-5");
-  assert.equal(request.options.headers.authorization, "Bearer private-token");
-  assert.doesNotMatch(request.options.body, /private-token/);
+  assert.equal(application.after, finding.proposal.replacement);
+  assert.equal(engine.getMetrics().applied_changes, 1);
+  assert.equal(engine.listFindings()[0].status, "applied");
+});
+
+test("rejected findings remain recorded and do not become changes", () => {
+  const engine = testEngine();
+  const audit = engine.startAudit({ workspace: "voice-md", inventory: DEMO_INVENTORY });
+  const finding = engine.addFinding(audit.audit_id, DEMO_FINDINGS[1]);
+  engine.decide(finding.finding_id, { decision: "reject", note: "继续收集证据" });
+  assert.equal(engine.getMetrics().rejected_changes, 1);
+  assert.equal(engine.getMetrics().applied_changes, 0);
+  assert.throws(() => engine.markApplied(finding.finding_id, { path: "x", before: "a", after: "b" }), /finding-not-approved/);
+});
+
+test("the demo contains all three implemented control relations without claiming the unfinished queue", () => {
+  const engine = testEngine();
+  const audit = engine.seedDemo();
+  assert.equal(audit.findings.length, 3);
+  assert.deepEqual(new Set(audit.findings.map((item) => item.relation)), new Set(["fire_overcomes_metal", "water_overcomes_fire"]));
+  assert.equal(engine.getMetrics().pending_decisions, 3);
+  assert.equal("non_blocking_queue" in engine.getMetrics(), false);
+});
+
+test("the installable Skill example conforms to the strict finding schema", async () => {
+  const [schema, fixture] = await Promise.all([
+    fs.readFile(new URL("../skills/wuxing-harness/references/finding.schema.json", import.meta.url), "utf8").then(JSON.parse),
+    fs.readFile(new URL("../examples/wuxing-harness/browser-rule.finding.json", import.meta.url), "utf8").then(JSON.parse)
+  ]);
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  const validate = ajv.compile(schema);
+  assert.equal(validate(fixture), true, JSON.stringify(validate.errors));
 });

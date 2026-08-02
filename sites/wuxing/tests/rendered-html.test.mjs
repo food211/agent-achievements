@@ -12,31 +12,19 @@ async function render(path = "/") {
   );
 }
 
-async function callApi(body) {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-  return worker.fetch(
-    new Request("http://localhost/api/wuxing", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
-    { waitUntil() {}, passThroughOnException() {} },
-  );
-}
-
-test("server-renders the Wuxing creation workspace", async () => {
+test("server-renders the Wuxing Harness rule audit", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
-  assert.match(html, /<title>五行创作调控<\/title>/);
-  assert.match(html, /五行创作调控/);
-  assert.match(html, /看看差在哪/);
-  assert.match(html, /五行调稿|引水/);
-  assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/);
+  assert.match(html, /<title>五行 Harness<\/title>/);
+  assert.match(html, /给 AI 的规则做一次代谢/);
+  assert.match(html, /发现的问题/);
+  assert.match(html, /批准并覆盖/);
+  assert.doesNotMatch(html, /五行创作调控|引水|改稿/);
 });
 
-test("rejects oversized writing before it reaches the model", async () => {
-  const response = await callApi({ operation: "diagnose", text: "字".repeat(8001) });
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), { error: "text-too-long" });
+test("the public demo no longer exposes the writing model endpoint", async () => {
+  const response = await render("/api/wuxing");
+  assert.equal(response.status, 404);
 });

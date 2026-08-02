@@ -3,58 +3,47 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#ebe7dc" />
-    <title>五行创作助手</title>
+    <meta name="theme-color" content="#15201c" />
+    <title>五行 Harness</title>
     <script type="module" src="/src/main.js"></script>
   </head>
   <body>
     <main class="page-shell">
       <header class="masthead">
-        <div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>文</span></div>
-        <div><small>WUXING CREATION HARNESS</small><h1>五行创作调控</h1><p>调那个还差一点</p></div>
-        <div class="masthead-tools"><span class="boundary">只看这一稿</span><button id="themeToggle" type="button" aria-label="切换深浅主题">深色</button></div>
+        <div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span>克</span></div>
+        <div class="brand-copy"><small>WUXING AGENT HARNESS</small><h1>五行 Harness</h1><p>给 AI 的规则做一次代谢</p></div>
+        <button id="themeToggle" class="quiet-button" type="button">浅色</button>
       </header>
 
-      <section class="workspace">
-        <article class="paper source-card">
-          <div class="section-label"><span>01</span><b>原文</b><small>把那段还差一点的文字放进来</small></div>
-          <textarea id="sourceText" aria-label="需要诊断的原文"></textarea>
-          <button class="primary" id="diagnose">看看差在哪</button>
-          <p class="message" id="message" role="status"></p>
-        </article>
+      <section class="hero">
+        <div><span class="eyebrow">这次审查</span><h2>规则还在，事实已经往前走了。</h2><p>Harness 对照规则、代码、测试和运行记录，把冲突带到你面前。你决定以后，它才会覆盖旧规则。</p></div>
+        <div class="metrics" id="metrics" aria-label="审查统计"></div>
+      </section>
 
-        <article class="paper terrain-card">
-          <div class="section-label"><span>02</span><b>这一稿怎么了</b><small>每个判断都能在原文里找到</small></div>
-          <div class="terrain" id="terrain" data-focus="none">
-            <svg viewBox="0 0 400 230" role="img" aria-label="由五种创作力量构成的抽象文字地形">
-              <path class="land earth" d="M18 186C72 151 110 159 154 130c45-30 83-31 126-8 42 22 67 9 102-18v104H18Z"/>
-              <path class="stream water" d="M20 59c66 2 72 72 138 66 59-5 64-71 127-55 46 12 54 55 98 52"/>
-              <path class="branch wood" d="M150 132c-7-50 11-85 52-111m-39 75c27-8 47-26 57-51m-62 26c-17-6-29-18-36-34"/>
-              <path class="flame fire" d="M275 126c-29-38 16-48 5-86 41 31 36 62 12 88"/>
-              <path class="cut metal" d="M70 165 330 79"/>
-              <circle class="spirit" cx="202" cy="126" r="23"/><circle class="eye" cx="194" cy="123" r="2"/><circle class="eye" cx="210" cy="123" r="2"/><path class="mouth" d="M196 132c4 3 8 3 12 0"/>
-            </svg>
-            <div class="element-labels"><span data-action="water">水<small>现实感知</small></span><span data-action="wood">木<small>新的可能</small></span><span data-action="fire">火<small>表达推进</small></span><span data-action="earth">土<small>事实结构</small></span><span data-action="metal">金<small>取舍边界</small></span></div>
-          </div>
-          <div class="diagnosis empty-state" id="diagnosis"><b>从原文开始</b><p>放进一段文字，我先找出最值得动的地方。</p></div>
-          <div class="actions" id="actions"></div>
-        </article>
+      <section class="control-map" aria-label="五行 Harness 当前实现">
+        <div><span class="node fire">火</span><b>执行结果</b><small>推翻旧规则</small></div>
+        <i>克</i>
+        <div><span class="node metal">金</span><b>人的判断</b><small>批准或砍掉方案</small></div>
+        <i>克</i>
+        <div><span class="node wood">木</span><b>修改方案</b><small>只留下合适的分支</small></div>
+        <div class="water-stop"><span class="node water">水</span><b>现实影响先叫停</b><small>自动任务和数据同步先问人</small></div>
+      </section>
 
-        <article class="paper revision-card">
-          <div class="section-label"><span>03</span><b>改过以后</b><small>一次只动一处</small></div>
-          <div class="revision empty-state" id="revision"><b>还没动笔</b><p>选一个动作，右边马上换一稿。</p></div>
-          <div class="judgment" id="judgment" hidden>
-            <small>这次我记住什么</small><blockquote id="learnedJudgment"></blockquote>
-            <div id="judgmentActions"><button class="primary" id="accept">记住这个</button><button id="reject">不是这个</button></div>
-            <p class="judgment-result" id="judgmentResult" role="status"></p>
-          </div>
+      <section class="audit-layout">
+        <aside class="findings-panel">
+          <div class="section-head"><div><small>待你判断</small><h2>发现的问题</h2></div><button id="resetDemo" class="quiet-button">重新演示</button></div>
+          <div id="findingList" class="finding-list"></div>
+        </aside>
+
+        <article class="detail-panel" id="detailPanel">
+          <div class="empty-state"><b>选一条发现</b><p>先看证据，再决定规则要不要改。</p></div>
         </article>
       </section>
 
-      <section class="preference-trail">
-        <div><small>YOUR CREATIVE PREFERENCE</small><h2>我记住的偏好</h2></div>
-        <div class="preferences" id="preferences"><p>你收下的判断会先放在这里。相似的选择多了，我才会把它当成偏好。</p></div>
-      </section>
+      <footer>
+        <p><b>这次只做三条克线。</b>完整非阻塞任务队列、木克土、土克水和旺衰诊断还没有做。</p>
+        <a href="https://github.com/food211/agent-achievements" target="_blank" rel="noreferrer">安装 Skill</a>
+      </footer>
     </main>
   </body>
 </html>

@@ -2,60 +2,142 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
-export const SCHEMA_VERSION = "wuxing-creation/v1";
+export const SCHEMA_VERSION = "wuxing-harness/v1";
 
-export const ACTIONS = Object.freeze({
-  water: { id: "water", label: "引水", meaning: "带回一个真实的现场" },
-  wood: { id: "wood", label: "生枝", meaning: "从这里长出新的角度" },
-  fire: { id: "fire", label: "点火", meaning: "让一句话真正往前走" },
-  earth: { id: "earth", label: "落土", meaning: "把空话落成抓得住的东西" },
-  metal: { id: "metal", label: "修枝", meaning: "留下真正需要的那一句" }
-});
-
-export const DEFAULT_SAMPLE = "我们总以为，创作需要更完整的方法、更准确的表达和更稳定的输出。只要不断优化流程，内容自然会变得更好。但真正重要的，也许还是保持耐心，相信时间会给出答案。";
-
-const SAMPLE_FIXTURE = Object.freeze({
-  diagnosis: {
-    summary: "水弱，土滞",
-    evidence: ["更完整的方法、更准确的表达和更稳定的输出", "保持耐心，相信时间会给出答案"],
-    explanation: "结构完整，却只有概括，没有新的真实感受进入。",
-    recommended_action: "water",
-    why_this_action: "先补进一个只有你经历过的现场。",
-    uncertainty: null,
-    terrain: { water: "weak", wood: "balanced", fire: "weak", earth: "stagnant", metal: "strong" }
+export const RELATIONS = Object.freeze({
+  fire_overcomes_metal: {
+    id: "fire_overcomes_metal",
+    label: "火克金",
+    meaning: "执行结果推翻旧规则"
   },
-  revisions: {
-    water: {
-      text: "昨晚十一点，我又把同一段开头删了第三遍。屏幕上的句子都没错，可读起来像隔着一层玻璃。那一刻我才发现，创作缺的往往不是更完整的方法，而是把手心里的犹豫、窗外的雨声和那个不愿承认的判断重新放回文字里。",
-      exchange: "得到一个可感知的现场，放下了抽象的完整感。",
-      learned_judgment: "你更在意真实细节带来的力量，不要用漂亮形容词替代它。"
-    },
-    wood: {
-      text: "我们总以为创作需要一套更完整的方法。但方法也可能是一堵修得很整齐的墙：它让每句话都有位置，也让意外无处生长。也许下一步不是继续优化流程，而是故意留下一个岔路，让文字去到作者自己也没预料的地方。",
-      exchange: "得到新的生长方向，放下了对完整路径的执着。",
-      learned_judgment: "你愿意保留意外的分支，不希望结构过早封住可能性。"
-    },
-    fire: {
-      text: "创作不会因为流程更完整就自然变好。真正拖住文字的，是我们迟迟不肯承担一句明确判断。方法可以继续优化，但先把最在意、最反对、最想推动的那句话说出来。",
-      exchange: "得到更早的立场，放下了温和但无方向的铺垫。",
-      learned_judgment: "你希望关键判断更早出现，不用完整铺垫稀释推进力。"
-    },
-    earth: {
-      text: "这周我改了四版流程：删掉两个提示词模板，把一次生成拆成三步，还给每一版加了评分。输出确实更稳定了，但最满意的那段文字，仍然来自我补进去的一句真实对话。方法能整理创作，却不能替代发生过的东西。",
-      exchange: "得到可核对的事实，放下了泛化的经验总结。",
-      learned_judgment: "你希望抽象结论先落到事实，再决定它是否值得保留。"
-    },
-    metal: {
-      text: "创作不会因为流程更完整就变好。方法只能稳定输出，不能替你决定什么值得说。",
-      exchange: "得到更清楚的边界，放下了重复解释和缓冲。",
-      learned_judgment: "你偏好删掉同义铺陈，让真正需要的判断单独站住。"
-    }
+  metal_overcomes_wood: {
+    id: "metal_overcomes_wood",
+    label: "金克木",
+    meaning: "人的判断砍掉不合适的方案"
+  },
+  water_overcomes_fire: {
+    id: "water_overcomes_fire",
+    label: "水克火",
+    meaning: "现实信号中止正在跑的行动"
   }
 });
 
-function clone(value) { return JSON.parse(JSON.stringify(value)); }
+export const FINDING_KINDS = Object.freeze({
+  direct_conflict: {
+    id: "direct_conflict",
+    label: "规则与事实冲突",
+    relation: "fire_overcomes_metal",
+    minimum_evidence: 1
+  },
+  repeated_friction: {
+    id: "repeated_friction",
+    label: "规则反复造成阻碍",
+    relation: "fire_overcomes_metal",
+    minimum_evidence: 2
+  },
+  automation_boundary: {
+    id: "automation_boundary",
+    label: "自动行为需要人判断",
+    relation: "water_overcomes_fire",
+    minimum_evidence: 1
+  }
+});
 
-export class JsonWuxingStore {
+export const DEMO_INVENTORY = Object.freeze([
+  { path: ".claude/rules/data-integrity.md", kind: "rule", summary: "数据关系与事件抽取约束" },
+  { path: ".claude/rules/browser-testing.md", kind: "rule", summary: "前端改动的浏览器验收要求" },
+  { path: "AGENTS.md", kind: "rule", summary: "自动任务和外部数据同步边界" },
+  { path: "server/src", kind: "code", summary: "当前实现" },
+  { path: "tests", kind: "test", summary: "行为验证" }
+]);
+
+export const DEMO_FINDINGS = Object.freeze([
+  {
+    finding_id: "finding-rule-direction",
+    kind: "direct_conflict",
+    title: "关系方向的规则描述已经写反",
+    rule: {
+      path: ".claude/rules/data-integrity.md",
+      locator: "关系边来源",
+      text: "关系由目标对象指向事件。",
+      rationale: "项目初期用它约束数据关系的来源。"
+    },
+    expected_outcome: "规则准确描述代码和测试共同维护的关系方向。",
+    observed_outcome: "代码与测试始终使用相反方向，实际运行没有破坏。",
+    trigger_count: 1,
+    contradiction_count: 1,
+    evidence: [
+      { type: "code", ref: "server/src/graph/relations.ts", summary: "关系写入以事件为起点。" },
+      { type: "test", ref: "tests/graph-relations.test.ts", summary: "测试断言与当前代码一致。" }
+    ],
+    proposal: {
+      replacement: "关系由事件指向其提及或关联的对象；来源必须能回溯到原始事件。",
+      reason: "修正规则描述，不改变已经稳定运行的代码。",
+      impact_scope: "数据完整性规则文档，以及后续 Agent 对关系方向的理解。",
+      reversibility: "只覆盖一条规则，版本控制可直接恢复。"
+    }
+  },
+  {
+    finding_id: "finding-browser-context",
+    kind: "repeated_friction",
+    title: "浏览器验收规则没有区分是否有人值守",
+    rule: {
+      path: ".claude/rules/browser-testing.md",
+      locator: "前端验证",
+      text: "所有前端改动都必须由 Agent 调用浏览器完成验收。",
+      rationale: "避免无人托管时只改代码、不看真实页面。"
+    },
+    expected_outcome: "前端改动能在真实页面里完成闭环。",
+    observed_outcome: "人在电脑前时仍强制调用高延迟工具，小改动反复等待，人工截图反馈反而更快。",
+    trigger_count: 3,
+    contradiction_count: 2,
+    evidence: [
+      { type: "run", ref: "run:chat-scroll-01", summary: "小改动等待浏览器启动，人工已经能立即反馈。" },
+      { type: "run", ref: "run:onboarding-copy-02", summary: "同类验收再次产生等待，没有增加有效证据。" },
+      { type: "decision", ref: "decision:attended-browser", summary: "用户明确区分有人值守和无人托管。" }
+    ],
+    proposal: {
+      replacement: "无人托管运行前端任务时，Agent 自行调用浏览器闭环；用户在电脑前时，优先请求截图和目测反馈，只有无法定位的问题再调用浏览器。",
+      reason: "保留真实页面验收，同时把执行者和触发条件写准确。",
+      impact_scope: "前端小改动的验证方式和工具等待时间。",
+      reversibility: "规则文本可单独恢复，不影响浏览器工具本身。"
+    }
+  },
+  {
+    finding_id: "finding-automation-gate",
+    kind: "automation_boundary",
+    title: "补齐历史数据的自动行为缺少产品授权",
+    rule: {
+      path: "AGENTS.md",
+      locator: "自动化边界",
+      text: "没有明确产品规则时，Agent 可按数据完整性偏好补齐历史数据。",
+      rationale: "希望减少数据缺口。"
+    },
+    expected_outcome: "自动化只执行已经得到授权、边界清楚的数据改动。",
+    observed_outcome: "新增定时任务或外部同步会改动大量既有数据，Agent 的完整性偏好不能替代产品判断。",
+    trigger_count: 1,
+    contradiction_count: 1,
+    evidence: [
+      { type: "decision", ref: "decision:automation-boundary", summary: "用户要求实施前先给出建议、理由并询问。" }
+    ],
+    proposal: {
+      replacement: "新增后台定时任务、无人触发的自动行为，或实质改变外部数据同步前，先向用户说明修改建议、理由、影响的数据范围和回退办法，得到确认后再实施。",
+      reason: "让现实影响范围先中止行动，再由人决定是否继续。",
+      impact_scope: "定时任务、外部同步和大批量历史数据改动。",
+      reversibility: "规则可恢复；被它拦下的方案尚未执行，不产生数据回滚成本。"
+    }
+  }
+]);
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function initialState() {
+  return { schema_version: SCHEMA_VERSION, audits: [], findings: [], decisions: [], applications: [], events: [] };
+}
+
+export class JsonHarnessStore {
   constructor(file) {
     this.file = file;
     this.state = null;
@@ -63,8 +145,12 @@ export class JsonWuxingStore {
 
   read() {
     if (this.state) return clone(this.state);
-    try { this.state = JSON.parse(fs.readFileSync(this.file, "utf8")); }
-    catch { this.state = { schema_version: SCHEMA_VERSION, sessions: [], preferences: [], events: [] }; }
+    try {
+      this.state = JSON.parse(fs.readFileSync(this.file, "utf8"));
+      if (this.state.schema_version !== SCHEMA_VERSION) this.state = initialState();
+    } catch {
+      this.state = initialState();
+    }
     return clone(this.state);
   }
 
@@ -77,112 +163,41 @@ export class JsonWuxingStore {
   }
 }
 
-export class MemoryWuxingStore {
-  constructor() { this.state = { schema_version: SCHEMA_VERSION, sessions: [], preferences: [], events: [] }; }
+export class MemoryHarnessStore {
+  constructor() { this.state = initialState(); }
   read() { return clone(this.state); }
   write(state) { this.state = clone(state); }
 }
 
-export class PresetWritingProvider {
-  diagnose({ text }) {
-    if (text.trim() === DEFAULT_SAMPLE) return clone(SAMPLE_FIXTURE.diagnosis);
-    return {
-      summary: "这段我还看不准",
-      evidence: [],
-      explanation: "还没找到足够具体的句子。",
-      recommended_action: null,
-      why_this_action: null,
-      uncertainty: "先不改。换一段文字，或者再补一点细节。",
-      terrain: { water: "unknown", wood: "unknown", fire: "unknown", earth: "unknown", metal: "unknown" }
-    };
-  }
-
-  rewrite({ text, action, preferences }) {
-    if (text.trim() !== DEFAULT_SAMPLE || !SAMPLE_FIXTURE.revisions[action]) throw new Error("revision-unavailable");
-    const revision = clone(SAMPLE_FIXTURE.revisions[action]);
-    revision.preference_context = preferences.map((item) => item.statement);
-    return revision;
-  }
+export function validateFinding(input) {
+  const finding = clone(input || {});
+  const definition = FINDING_KINDS[finding.kind];
+  if (!definition) throw new Error("finding-kind-invalid");
+  if (!finding.title || !finding.rule?.path || !finding.rule?.text) throw new Error("finding-rule-incomplete");
+  if (!Number.isInteger(finding.trigger_count) || finding.trigger_count < 0 || !Number.isInteger(finding.contradiction_count) || finding.contradiction_count < 0 || finding.contradiction_count > finding.trigger_count) throw new Error("finding-counts-invalid");
+  if (!Array.isArray(finding.evidence) || finding.evidence.length < definition.minimum_evidence) throw new Error("finding-evidence-insufficient");
+  if (finding.evidence.some((item) => !item.type || !item.ref || !item.summary)) throw new Error("finding-evidence-invalid");
+  const proposal = finding.proposal || {};
+  if (!proposal.replacement || !proposal.reason || !proposal.impact_scope || !proposal.reversibility) throw new Error("finding-proposal-incomplete");
+  finding.relation = definition.relation;
+  finding.status = finding.status || "pending";
+  return finding;
 }
 
-function extractJson(text) {
-  const trimmed = String(text || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("model-json-invalid");
-  return JSON.parse(trimmed.slice(start, end + 1));
-}
-
-export class AnthropicWritingProvider {
-  constructor({ baseUrl = "https://api.anthropic.com", authToken = "", apiKey = "", model = "claude-opus-5", fetchImpl = globalThis.fetch } = {}) {
-    if (!authToken && !apiKey) throw new Error("model-key-missing");
-    this.baseUrl = baseUrl.replace(/\/$/, "");
-    this.authToken = authToken;
-    this.apiKey = apiKey;
-    this.model = model;
-    this.fetch = fetchImpl;
-  }
-
-  async complete(system, user) {
-    const headers = { "content-type": "application/json", "anthropic-version": "2023-06-01" };
-    if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
-    if (this.apiKey) headers["x-api-key"] = this.apiKey;
-    let response;
-    try {
-      response = await this.fetch(`${this.baseUrl}/v1/messages`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ model: this.model, max_tokens: 1800, temperature: 0.2, system, messages: [{ role: "user", content: user }] }),
-        signal: AbortSignal.timeout(45000)
-      });
-    } catch (error) {
-      throw new Error(`model-network-failed:${error.cause?.code || error.name || "unknown"}`);
-    }
-    if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(`model-request-failed:${response.status}:${detail.slice(0, 240)}`);
-    }
-    const payload = await response.json();
-    return payload.content?.filter((item) => item.type === "text").map((item) => item.text).join("\n") || "";
-  }
-
-  async diagnose({ text, preferences }) {
-    const result = extractJson(await this.complete(
-      "你是写作诊断编辑。五行只描述当前作品：水=现实感知与具体现场，木=新角度与可能性，火=判断与推进，土=事实与结构，金=取舍与边界。绝不分析作者人格、命理或固定类型。只输出 JSON。",
-      `从原文引用 1–2 处短证据，只给一个主判断。证据不足必须明确 uncertainty，不得编造。\n\n原文：\n${text}\n\n已确认或待验证的创作偏好：\n${preferences.map((item) => `- [${item.status}] ${item.statement}`).join("\n") || "无"}\n\n输出 JSON：{"summary":"如：水弱，土滞","evidence":["短证据"],"explanation":"不超过45字","recommended_action":"water|wood|fire|earth|metal|null","why_this_action":"不超过30字或null","uncertainty":"证据充分时为null，否则说明原因","terrain":{"water":"weak|balanced|strong|stagnant|unknown","wood":"...","fire":"...","earth":"...","metal":"..."}}`
-    ));
-    if (!Array.isArray(result.evidence) || !result.terrain) throw new Error("model-diagnosis-invalid");
-    if (result.recommended_action && !ACTIONS[result.recommended_action]) throw new Error("model-action-invalid");
-    return result;
-  }
-
-  async rewrite({ text, action, preferences }) {
-    const result = extractJson(await this.complete(
-      "你是写作改稿编辑。保留原文意图、长度级别和第一人称，不写泛化鸡汤，不凭空捏造事实；需要真实信息时使用方括号占位。只输出 JSON。",
-      `原文：\n${text}\n\n动作：${ACTIONS[action].label}——${ACTIONS[action].meaning}\n\n可参考的创作偏好：\n${preferences.map((item) => `- [${item.status}] ${item.statement}`).join("\n") || "无"}\n\n输出 JSON：{"text":"改写后的完整文本","exchange":"这次得到什么，放下什么","learned_judgment":"一句可由用户确认或否决的偏好归纳"}`
-    ));
-    if (!result.text || !result.exchange || !result.learned_judgment) throw new Error("model-revision-invalid");
-    result.preference_context = preferences.map((item) => item.statement);
-    return result;
-  }
-}
-
-export class WuxingEngine {
-  constructor({ store = new MemoryWuxingStore(), provider = new PresetWritingProvider(), now = () => new Date(), id = randomUUID, onEvent = null } = {}) {
+export class WuxingHarnessEngine {
+  constructor({ store = new MemoryHarnessStore(), now = () => new Date(), id = randomUUID, onEvent = null } = {}) {
     this.store = store;
-    this.provider = provider;
     this.now = now;
     this.id = id;
     this.onEvent = onEvent;
   }
 
-  emit(state, type, session, data = {}) {
+  emit(state, type, data = {}) {
     const event = {
       schema_version: SCHEMA_VERSION,
       event_id: `evt_${this.id()}`,
       event_type: type,
       occurred_at: this.now().toISOString(),
-      session_id: session.session_id,
       data
     };
     state.events.push(event);
@@ -190,82 +205,126 @@ export class WuxingEngine {
     return event;
   }
 
-  async start(text) {
-    const normalized = String(text || "").trim();
-    if (normalized.length < 20) throw new Error("text-too-short");
+  startAudit({ workspace = "workspace", inventory = [] } = {}) {
     const state = this.store.read();
-    const preferences = state.preferences.filter((item) => item.status !== "deleted");
-    const session = {
+    const audit = {
       schema_version: SCHEMA_VERSION,
-      session_id: `wuxing_${this.id()}`,
-      status: "diagnosed",
-      created_at: this.now().toISOString(),
-      original_text: normalized,
-      preference_context: preferences.map((item) => ({ preference_id: item.preference_id, statement: item.statement, status: item.status })),
-      diagnosis: await this.provider.diagnose({ text: normalized, preferences }),
-      interventions: [],
-      decision: null
+      audit_id: `audit_${this.id()}`,
+      workspace: String(workspace),
+      status: "collecting",
+      started_at: this.now().toISOString(),
+      inventory: clone(inventory),
+      rules_examined: inventory.filter((item) => item.kind === "rule").length
     };
-    state.sessions.push(session);
-    this.emit(state, "diagnosis.ready", session, { diagnosis: session.diagnosis, preference_context: session.preference_context });
-    if (session.diagnosis.recommended_action) this.emit(state, "judgment.requested", session, { recommended_action: session.diagnosis.recommended_action });
+    state.audits.push(audit);
+    this.emit(state, "audit.started", { audit_id: audit.audit_id, workspace: audit.workspace, rules_examined: audit.rules_examined });
     this.store.write(state);
-    return clone(session);
+    return clone(audit);
   }
 
-  async intervene(sessionId, action) {
-    if (!ACTIONS[action]) throw new Error("unknown-action");
+  addFinding(auditId, input) {
     const state = this.store.read();
-    const session = state.sessions.find((item) => item.session_id === sessionId);
-    if (!session) throw new Error("session-not-found");
-    if (session.diagnosis.uncertainty) throw new Error("diagnosis-uncertain");
-    const preferences = state.preferences.filter((item) => item.status !== "deleted");
-    const output = await this.provider.rewrite({ text: session.original_text, action, diagnosis: session.diagnosis, preferences });
-    const intervention = { action, action_label: ACTIONS[action].label, created_at: this.now().toISOString(), ...output };
-    session.interventions.push(intervention);
-    session.status = "revised";
-    this.emit(state, "intervention.selected", session, { action });
-    this.emit(state, "revision.ready", session, { action, exchange: output.exchange, learned_judgment: output.learned_judgment });
+    const audit = state.audits.find((item) => item.audit_id === auditId);
+    if (!audit) throw new Error("audit-not-found");
+    const finding = validateFinding({ ...input, finding_id: input.finding_id || `finding_${this.id()}` });
+    if (state.findings.some((item) => item.finding_id === finding.finding_id)) throw new Error("finding-id-duplicate");
+    finding.schema_version = SCHEMA_VERSION;
+    finding.audit_id = auditId;
+    finding.created_at = this.now().toISOString();
+    state.findings.push(finding);
+    this.emit(state, "finding.raised", { audit_id: auditId, finding_id: finding.finding_id, kind: finding.kind, relation: finding.relation });
     this.store.write(state);
-    return clone(intervention);
+    return clone(finding);
   }
 
-  judge(sessionId, { accepted, feedback = "" } = {}) {
+  finishAudit(auditId) {
     const state = this.store.read();
-    const session = state.sessions.find((item) => item.session_id === sessionId);
-    const intervention = session?.interventions.at(-1);
-    if (!session || !intervention) throw new Error("revision-not-found");
-    session.decision = { accepted: Boolean(accepted), feedback: String(feedback).trim(), decided_at: this.now().toISOString() };
-    session.status = accepted ? "accepted" : "rejected";
-    if (accepted) {
-      let preference = state.preferences.find((item) => item.action === intervention.action && item.statement === intervention.learned_judgment && item.status !== "deleted");
-      if (preference) {
-        preference.confirmations += 1;
-        preference.status = preference.confirmations >= 2 ? "stable" : "candidate";
-        preference.updated_at = this.now().toISOString();
-      } else {
-        preference = {
-          schema_version: SCHEMA_VERSION,
-          preference_id: `pref_${this.id()}`,
-          action: intervention.action,
-          statement: intervention.learned_judgment,
-          status: "candidate",
-          confirmations: 1,
-          created_at: this.now().toISOString(),
-          updated_at: this.now().toISOString()
-        };
-        state.preferences.push(preference);
-      }
-      session.preference_id = preference.preference_id;
-      this.emit(state, "preference.accepted", session, { preference: clone(preference) });
-    } else {
-      this.emit(state, "preference.rejected", session, { action: intervention.action, feedback: session.decision.feedback });
-    }
+    const audit = state.audits.find((item) => item.audit_id === auditId);
+    if (!audit) throw new Error("audit-not-found");
+    audit.status = "awaiting_decisions";
+    audit.completed_at = this.now().toISOString();
+    audit.finding_count = state.findings.filter((item) => item.audit_id === auditId).length;
+    this.emit(state, "audit.completed", { audit_id: auditId, finding_count: audit.finding_count });
     this.store.write(state);
-    return clone(session);
+    return clone(audit);
   }
 
-  getSession(sessionId) { return this.store.read().sessions.find((item) => item.session_id === sessionId) || null; }
-  listPreferences() { return this.store.read().preferences.filter((item) => item.status !== "deleted"); }
+  decide(findingId, { decision, note = "" } = {}) {
+    if (!['approve', 'reject'].includes(decision)) throw new Error("decision-invalid");
+    const state = this.store.read();
+    const finding = state.findings.find((item) => item.finding_id === findingId);
+    if (!finding) throw new Error("finding-not-found");
+    if (finding.status !== "pending") throw new Error("finding-already-decided");
+    const record = {
+      schema_version: SCHEMA_VERSION,
+      decision_id: `decision_${this.id()}`,
+      finding_id: findingId,
+      decision,
+      note: String(note).trim(),
+      decided_at: this.now().toISOString()
+    };
+    finding.status = decision === "approve" ? "approved" : "rejected";
+    state.decisions.push(record);
+    this.emit(state, `finding.${finding.status}`, { finding_id: findingId, decision_id: record.decision_id });
+    this.store.write(state);
+    return { finding: clone(finding), decision: clone(record) };
+  }
+
+  markApplied(findingId, { path: rulePath, before, after, validation = [] } = {}) {
+    const state = this.store.read();
+    const finding = state.findings.find((item) => item.finding_id === findingId);
+    if (!finding) throw new Error("finding-not-found");
+    if (finding.status !== "approved") throw new Error("finding-not-approved");
+    if (!rulePath || !before || !after) throw new Error("application-incomplete");
+    const application = {
+      schema_version: SCHEMA_VERSION,
+      application_id: `application_${this.id()}`,
+      finding_id: findingId,
+      path: rulePath,
+      before,
+      after,
+      validation: clone(validation),
+      applied_at: this.now().toISOString()
+    };
+    finding.status = "applied";
+    state.applications.push(application);
+    this.emit(state, "finding.applied", { finding_id: findingId, application_id: application.application_id, path: rulePath });
+    this.store.write(state);
+    return clone(application);
+  }
+
+  seedDemo() {
+    const audit = this.startAudit({ workspace: "真实 Agent 工作区", inventory: DEMO_INVENTORY });
+    for (const finding of DEMO_FINDINGS) this.addFinding(audit.audit_id, finding);
+    this.finishAudit(audit.audit_id);
+    return this.getAudit(audit.audit_id);
+  }
+
+  getAudit(auditId) {
+    const state = this.store.read();
+    const audit = state.audits.find((item) => item.audit_id === auditId);
+    if (!audit) return null;
+    return { ...clone(audit), findings: clone(state.findings.filter((item) => item.audit_id === auditId)) };
+  }
+
+  listFindings({ status } = {}) {
+    const findings = this.store.read().findings;
+    return clone(status ? findings.filter((item) => item.status === status) : findings);
+  }
+
   listEvents({ after = 0 } = {}) { return this.store.read().events.slice(after); }
+
+  getMetrics() {
+    const state = this.store.read();
+    return {
+      rules_examined: state.audits.reduce((sum, item) => sum + (item.rules_examined || 0), 0),
+      findings_raised: state.findings.length,
+      pending_decisions: state.findings.filter((item) => item.status === "pending").length,
+      approved_changes: state.findings.filter((item) => ["approved", "applied"].includes(item.status)).length,
+      applied_changes: state.findings.filter((item) => item.status === "applied").length,
+      rejected_changes: state.findings.filter((item) => item.status === "rejected").length,
+      direct_conflicts: state.findings.filter((item) => item.kind === "direct_conflict").length,
+      repeated_friction: state.findings.filter((item) => item.kind === "repeated_friction").length
+    };
+  }
 }

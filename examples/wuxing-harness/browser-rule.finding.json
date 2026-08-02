@@ -1,0 +1,37 @@
+{
+  "schema_version": "wuxing-harness/v1",
+  "finding_id": "finding-browser-context",
+  "kind": "repeated_friction",
+  "relation": "fire_overcomes_metal",
+  "mapping_note": "",
+  "title": "浏览器验收规则没有区分是否有人值守",
+  "rule": {
+    "path": ".claude/rules/browser-testing.md",
+    "locator": "前端验证",
+    "text": "所有前端改动都必须由 Agent 调用浏览器完成验收。",
+    "rationale": "避免无人托管时只改代码、不看真实页面。"
+  },
+  "expected_outcome": "前端改动能在真实页面里完成闭环。",
+  "observed_outcome": "人在电脑前时仍强制调用高延迟工具，小改动反复等待。",
+  "trigger_count": 3,
+  "contradiction_count": 2,
+  "evidence": [
+    {
+      "type": "run",
+      "ref": "run:chat-scroll-01",
+      "summary": "人工已经能立即反馈，任务仍等待浏览器启动。"
+    },
+    {
+      "type": "decision",
+      "ref": "decision:attended-browser",
+      "summary": "用户明确区分有人值守和无人托管。"
+    }
+  ],
+  "proposal": {
+    "replacement": "无人托管运行前端任务时，Agent 自行调用浏览器闭环；用户在电脑前时，优先请求截图和目测反馈，只有无法定位的问题再调用浏览器。",
+    "reason": "保留真实页面验收，同时把执行者和触发条件写准确。",
+    "impact_scope": "前端小改动的验证方式和工具等待时间。",
+    "reversibility": "规则文本可单独恢复，不影响浏览器工具本身。"
+  },
+  "extensions": {}
+}

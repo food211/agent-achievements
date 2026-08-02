@@ -8,7 +8,6 @@
     "build": "node --check src/server.js"
   },
   "dependencies": {
-    "@agent-achievements/wuxing-core": "0.1.0",
-    "undici": "^7.16.0"
+    "@agent-achievements/wuxing-core": "0.1.0"
   }
 }

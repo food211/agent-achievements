@@ -1,6 +1,6 @@
 # Agent Achievements · AI 成就系统
 
-> 同一仓库包含两个彼此独立、可通过协议联动的系统：Agent Achievements 成就层，以及五行创作调控内核与助手。
+> 同一仓库包含两个彼此独立、可通过协议联动的系统：Agent Achievements 成就层，以及审查 Agent 规则的五行 Harness。
 
 [English](./README_EN.md)
 
@@ -31,7 +31,7 @@ Agent Achievements 是一个面向 AI Agent 的开放成就层。第三方系统
 - **申请必须有证据**：Agent 可以申请成就，但不能给自己颁奖。
 - **审核不阻塞任务**：提交申请后继续工作，不等待人的成就审核。
 
-第一套接入案例是[五行 Agent Harness](./examples/wuxing-harness/README.md)，协议本身不绑定 Codex、Claude Code 或任何特定运行时。
+第一套接入案例是[五行 Harness](./skills/wuxing-harness/SKILL.md)，协议本身不绑定 Codex、Claude Code 或任何特定运行时。
 
 ## 两种界面
 
@@ -74,6 +74,7 @@ agent-achievements/
 ├── apps/companion/                    # 跟随 Agent 生命周期的桌面伙伴
 ├── packages/protocol/                 # 标准 JSON Schema
 ├── skills/use-agent-achievements/     # 可安装的 Agent Skill
+├── skills/wuxing-harness/              # 规则审查 Skill
 ├── examples/wuxing-harness/           # 第三方系统接入示例
 └── tests/                              # Schema 一致性测试
 ```
@@ -99,11 +100,29 @@ Windows 右下角系统托盘会显示独立的高对比度活奖杯图标；桌
 
 桌宠默认置顶，也可以在「外观与常驻」或托盘菜单中关闭/重新开启；选择会保存在本机。
 
-桌宠也可以作为五行创作调控的桌面入口。托盘菜单或展开面板中的「开始调控」会打开与线上版本完全相同的 SPA；桌面壳只额外提供拖拽、置顶、吸附和托盘能力。
+桌宠也是五行 Harness 的桌面入口。托盘菜单或展开面板中的「规则体检」会打开线上演示；桌面壳只额外提供拖拽、置顶、吸附和托盘能力。本地开发时可通过 `WUXING_ASSISTANT_URL=http://127.0.0.1:4318` 改用本地服务。
 
-## 五行创作调控
+## 五行 Harness
 
-五行系统不判断作者人格，只描述当前这版作品的状态，并提供五个可操作方向：引水、生枝、点火、落土、修枝。用户接受的判断先成为候选偏好，出现相近选择后才升级为稳定偏好。
+规则越积越多，Agent 通常只会继续添加，很少主动发现旧规则已经和代码、测试或运行事实对不上。五行 Harness 把规则审查做成一个可安装 Skill：它读取工作区已有规则和相关证据，提出带替换文本、影响范围和可逆性的修改建议，等人批准后直接覆盖旧规则。
+
+完整主张和范围见[产品文档](./docs/wuxing-harness-product.md)。
+
+当前实现三条克线：
+
+- **火克金**：执行结果推翻旧规则。直接矛盾发现一次就提出；规则仍自洽但反复造成阻碍时，积累多次证据再提出。
+- **金克木**：人批准或拒绝方案，砍掉不合适的修改分支。
+- **水克火**：新增定时任务、无人触发的自动行为或外部数据同步先停下来，说明影响后交给人判断。
+
+安装 Skill 后，可以直接说“审一下这个工作区积累的规则”：
+
+```powershell
+Copy-Item -Recurse skills\wuxing-harness "$env:CODEX_HOME\skills\wuxing-harness"
+```
+
+Skill 的记录脚本会把待判断项保存在工作区 `.wuxing-harness/state.json`，只保存规则、证据和人的判断，不自行修改规则文件。批准后由 Agent 重新读取目标文件，直接覆盖旧描述并运行相应验证。
+
+本地体验规则审查 Demo：
 
 ```bash
 npm install
@@ -111,13 +130,9 @@ npm run build --workspace=@agent-achievements/wuxing-assistant
 npm run wuxing
 ```
 
-打开 `http://127.0.0.1:4318`。同一进程同时提供 SPA 和 `/api/wuxing/*` API；当前 MVP 对默认样本使用可复现的预置 Provider，对其他文本会明确返回证据不足。
+打开 `http://127.0.0.1:4318`。演示使用三项来自真实工作区的规则问题：语义漂移、浏览器验收条件过宽、自动补齐历史数据越过产品判断。公开 SPA 只展示同一闭环，不读取访客本机文件，也不需要模型 API Key。
 
-真实模型调用必须发生在 `apps/wuxing-service` 服务端。API Key 应保存为 OpenDeploy Secret 或本机环境变量，绝不能使用 `VITE_*` 注入 SPA。Electron 桌宠和浏览器 SPA 都只调用五行后端，不持有模型密钥。当前 Anthropic Provider 默认模型为 `claude-opus-5`。
-
-本地网络需要显式代理时，可仅给服务端设置 `MODEL_HTTPS_PROXY`；OpenDeploy 通常不需要该变量。
-
-环境变量模板见 `apps/wuxing-service/.env.example`。本地已经按 Anthropic 原生 Messages API 和 `claude-opus-5` 接好；当前旧 Key 对应的上游地址在 TLS 握手阶段断开，因此真实调用暂未通过，预置样本模式不受影响。
+这次没有实现完整的非阻塞任务队列、木克土、土克水和旺衰诊断。它们属于后续研究，不算进当前能力。
 
 右下角状态灯区分三种生命周期：绿色表示 Agent 正在工作，琥珀色表示本轮已结束、正在等待，灰色表示没有有效会话。Codex 可以安装官方生命周期 hook 适配器，自动在每轮开始、工具进展、停止和会话结束时更新状态：
 

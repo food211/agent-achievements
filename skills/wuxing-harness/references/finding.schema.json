@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/food211/agent-achievements/blob/main/skills/wuxing-harness/references/finding.schema.json",
+  "title": "Wuxing Harness Finding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "finding_id", "kind", "relation", "mapping_note", "title", "rule", "expected_outcome", "observed_outcome", "trigger_count", "contradiction_count", "evidence", "proposal", "extensions"],
+  "properties": {
+    "schema_version": { "const": "wuxing-harness/v1" },
+    "finding_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "kind": { "enum": ["direct_conflict", "repeated_friction", "automation_boundary"] },
+    "relation": { "enum": ["fire_overcomes_metal", "metal_overcomes_wood", "water_overcomes_fire", "unmapped"] },
+    "mapping_note": { "type": "string", "maxLength": 1000 },
+    "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "locator", "text", "rationale"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "locator": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 12000 },
+        "rationale": { "type": "string", "minLength": 1, "maxLength": 4000 }
+      }
+    },
+    "expected_outcome": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "observed_outcome": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "trigger_count": { "type": "integer", "minimum": 0 },
+    "contradiction_count": { "type": "integer", "minimum": 0 },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "ref", "summary"],
+        "properties": {
+          "type": { "enum": ["code", "test", "run", "decision", "artifact"] },
+          "ref": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 2000 }
+        }
+      }
+    },
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["replacement", "reason", "impact_scope", "reversibility"],
+      "properties": {
+        "replacement": { "type": "string", "minLength": 1, "maxLength": 12000 },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "impact_scope": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "reversibility": { "type": "string", "minLength": 1, "maxLength": 4000 }
+      }
+    },
+    "extensions": { "type": "object" }
+  }
+}
