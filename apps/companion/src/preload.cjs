@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld("agentCompanion", {
   requestAchievementDesign: (brief) => ipcRenderer.invoke("companion:request-achievement-design", brief),
   requestAchievementDiagnostic: () => ipcRenderer.invoke("companion:request-achievement-diagnostic"),
   confirmDiagnosticDiscovery: (requestId, discoveryId) => ipcRenderer.invoke("companion:confirm-diagnostic-discovery", requestId, discoveryId),
+  reviewClaim: (claimId, decision) => ipcRenderer.invoke("companion:review-claim", claimId, decision),
   hover: (hovering) => ipcRenderer.send("companion:hover", Boolean(hovering)),
   dragPrepare: () => ipcRenderer.send("companion:drag-prepare"),
   dragMove: () => ipcRenderer.send("companion:drag-move"),

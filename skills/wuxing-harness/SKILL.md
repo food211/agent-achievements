@@ -1,6 +1,6 @@
 ---
 name: wuxing-harness
-description: Audit accumulated AI workspace rules against current code, tests, artifacts, and run evidence; identify direct contradictions, repeatedly harmful rules, and unauthorized automation; prepare evidence-backed replacement proposals for human approval; then overwrite approved rules and record the result. Use when a user asks to audit, prune, metabolize, update, or check whether AGENTS.md, CLAUDE.md, rules, Skills, prompts, or long-running Agent constraints are stale, drifting, over-broad, or blocking work.
+description: Audit accumulated AI workspace rules against current code, tests, artifacts, and run evidence; identify direct contradictions, repeatedly harmful rules, and unauthorized automation; prepare evidence-backed replacement proposals for human approval; overwrite approved rules; and report verified improvements to Agent Achievements for human recognition. Use when a user asks to audit, prune, metabolize, update, or check whether AGENTS.md, CLAUDE.md, rules, Skills, prompts, or long-running Agent constraints are stale, drifting, over-broad, or blocking work.
 ---
 
 # 五行 Harness
@@ -29,6 +29,17 @@ description: Audit accumulated AI workspace rules against current code, tests, a
 7. 获得批准后，重新读取目标文件完整内容，确认原文仍存在，然后直接覆盖旧规则。不要让新旧两版同时留在上下文里。历史交给版本控制。
 8. 运行与影响范围相称的验证，记录改前、改后和验证结果。拒绝的发现保留判断记录，不改规则。
 
+## 与成就系统形成闭环
+
+如果同级 Skills 目录里安装了 `use-agent-achievements`，`harness-cli.mjs init` 会登记两项成就：
+
+- `规则园丁`：规则得到人批准、完成修改并通过验证后，才提交一次申请。
+- `产品守门员`：面对会持续影响用户数据的产品空白，正确停下来请人判断三次后，才提交申请。
+
+CLI 会把合格结果转换为 `agent-achievements/v1` 事件并交给成就系统。找出问题、扫描文件、提出很多建议都不算成就。Agent 只能提交带证据的申请，不能自行授予。人授予或拒绝后，结果会在后续任务的 Agent 成就上下文里出现。
+
+没有安装成就系统时，事件会留在 `.wuxing-harness/achievement-events/`，规则审查照常完成，不被成就流程阻塞。
+
 ## 五行对应
 
 - **火克金**：代码、测试或反复运行结果推翻旧规则。
@@ -49,7 +60,7 @@ node <skill-path>/scripts/harness-cli.mjs decide --finding <id> --decision appro
 node <skill-path>/scripts/harness-cli.mjs applied --finding <id> --input <application.json>
 ```
 
-记录默认保存在当前工作区 `.wuxing-harness/state.json`。脚本只保存判断和证据，不自行修改规则文件。
+记录默认保存在当前工作区 `.wuxing-harness/state.json`。脚本只保存判断和证据，不自行修改规则文件。成就申请始终晚于人的批准和实际验证，不能反过来驱动审查结论。
 
 ## 给人的输出
 

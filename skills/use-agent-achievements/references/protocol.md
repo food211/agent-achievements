@@ -80,6 +80,15 @@ Submit a claim only when event processing marks an achievement `claimable`:
 
 An agent may submit a claim but may not award itself an achievement.
 
+Human-operated surfaces can list pending claims and record a decision:
+
+```powershell
+node <skill-path>/scripts/achievement-cli.mjs claim-list
+node <skill-path>/scripts/achievement-cli.mjs review --claim <claim-id> --decision award|reject --feedback <human-feedback>
+```
+
+`review` is reserved for a human action in the companion or another trusted UI. Agents must not call it on their own behalf.
+
 ## Protocol behavior
 
 - Treat `event_id` as an idempotency key.

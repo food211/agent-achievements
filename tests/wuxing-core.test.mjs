@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
+import addFormats from "ajv-formats";
 import {
   DEMO_FINDINGS,
   DEMO_INVENTORY,
   MemoryHarnessStore,
   WuxingHarnessEngine,
+  buildAchievementEvent,
   validateFinding
 } from "../packages/wuxing-core/src/index.js";
 
@@ -57,6 +59,28 @@ test("approved findings can be applied by overwriting the old rule", () => {
   assert.equal(application.after, finding.proposal.replacement);
   assert.equal(engine.getMetrics().applied_changes, 1);
   assert.equal(engine.listFindings()[0].status, "applied");
+});
+
+test("an applied rule becomes a normalized evidence-backed achievement event", async () => {
+  const engine = testEngine();
+  const audit = engine.startAudit({ workspace: "voice-md", inventory: DEMO_INVENTORY });
+  const finding = engine.addFinding(audit.audit_id, DEMO_FINDINGS[0]);
+  engine.decide(finding.finding_id, { decision: "approve", note: "同意修改" });
+  const application = engine.markApplied(finding.finding_id, {
+    path: finding.rule.path,
+    before: finding.rule.text,
+    after: finding.proposal.replacement,
+    validation: ["tests/graph-relations.test.ts"]
+  });
+  const harnessEvent = engine.listEvents().at(-1);
+  const event = buildAchievementEvent({ harnessEvent, finding: engine.listFindings()[0], application, agentId: "codex-test" });
+  const schema = JSON.parse(await fs.readFile(new URL("../packages/protocol/schemas/event.schema.json", import.meta.url), "utf8"));
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  addFormats(ajv);
+  const validate = ajv.compile(schema);
+  assert.equal(event.event_type, "rule.revised");
+  assert.equal(event.actor.agent_id, "codex-test");
+  assert.equal(validate(event), true, JSON.stringify(validate.errors));
 });
 
 test("rejected findings remain recorded and do not become changes", () => {

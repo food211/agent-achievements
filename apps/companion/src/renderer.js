@@ -4,6 +4,7 @@ const panel = document.getElementById("panel");
 const close = document.getElementById("close");
 const tracked = document.getElementById("tracked");
 const awards = document.getElementById("awards");
+const pendingClaims = document.getElementById("pendingClaims");
 const catalog = document.getElementById("catalog");
 const collectionCount = document.getElementById("collectionCount");
 const totalScore = document.getElementById("totalScore");
@@ -147,6 +148,15 @@ function render(payload) {
         ${item.source_skill ? `<small>系统发现 · 来自 ${escapeHtml(item.source_skill)}</small>` : ""}
       </article>`).join("")
     : "<p class='empty'>最近还没有拿到新成就。</p>";
+  pendingClaims.innerHTML = payload.claims?.length
+    ? payload.claims.map((item) => `
+      <article>
+        <div><b>${escapeHtml(item.icon)} ${escapeHtml(item.title)}</b><em>${escapeHtml(item.tier_label)} · ${item.points} 分</em></div>
+        <p>${escapeHtml(item.summary)}</p>
+        <small>${escapeHtml(item.evidence_count)} 条证据 · 等你决定是否授予</small>
+        <div class="claim-actions"><button data-claim-id="${escapeHtml(item.claim_id)}" data-claim-decision="award">认可并授予</button><button data-claim-id="${escapeHtml(item.claim_id)}" data-claim-decision="reject">这次不授予</button></div>
+      </article>`).join("")
+    : "<p class='empty'>没有等待确认的成就申请。</p>";
   const awardSignature = payload.awards.map((item) => item.achievement_id).join("|");
   if (previousAwardSignature !== null && awardSignature !== previousAwardSignature) {
     if (payload.catalog.some((item) => item.origin === "system_discovered")) { catalogOrigin = "system_discovered"; renderCatalog(); }
@@ -158,6 +168,14 @@ function render(payload) {
   renderDesignRequests(latestDesigns);
   if (forge.classList.contains("visible")) renderEditorList();
 }
+
+pendingClaims.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-claim-id]");
+  if (!button) return;
+  button.disabled = true;
+  try { await window.agentCompanion.reviewClaim(button.dataset.claimId, button.dataset.claimDecision); }
+  catch { button.disabled = false; }
+});
 
 pet.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;

@@ -122,6 +122,8 @@ Copy-Item -Recurse skills\wuxing-harness "$env:CODEX_HOME\skills\wuxing-harness"
 
 Skill 的记录脚本会把待判断项保存在工作区 `.wuxing-harness/state.json`，只保存规则、证据和人的判断，不自行修改规则文件。批准后由 Agent 重新读取目标文件，直接覆盖旧描述并运行相应验证。
 
+规则完成修改并通过验证后，Harness 会把结果转换为成就事件。成就系统只增加进度并接收 Agent 的证据申请，不会自动颁奖；申请会出现在桌面助手的「等待认可」里。人授予或拒绝后，结果会在 Agent 下一次读取成就上下文时出现。找出很多问题、扫描很多文件都不算成就，闭环只奖励已经得到批准并验证过的改进。
+
 本地体验规则审查 Demo：
 
 ```bash
@@ -142,7 +144,7 @@ node skills/use-agent-achievements/scripts/install-codex-hooks.mjs
 
 安装后在 Codex `/hooks` 中审核并信任该 hook。它只写入规范化 presence，不读取对话正文，也不把 presence 算作成就证据。
 
-整个奖杯都可以操作：短按展开成就面板，移动超过阈值后进入拖动。靠近屏幕左、右或上边缘时，它会自动吸附并缩回，保留足够醒目的可见部分；底部不会触发吸附。鼠标移上去时奖杯重新探出，吸附位置会跨重启保存。展开与关闭面板不会改变奖杯原来的位置。
+整个五行助手都可以操作：短按展开成就面板，移动超过阈值后进入拖动。靠近屏幕左、右或上边缘时，它会自动吸附并缩回，保留足够醒目的可见部分；底部不会触发吸附。鼠标移上去时助手重新探出，吸附位置会跨重启保存。展开与关闭面板不会改变原来的位置。
 
 图鉴分为“系统发现”和“我的成就”。首次结算会请求 Agent 检查已经安装的 Skill、项目规则以及提交、测试、决策记录等真实证据。安装 Skill 本身不算成就；只有 Skill 已经帮助用户产生正向改变才会被记录。高可信铜牌和银牌由桌宠的结算策略自动授予，中可信发现和所有金牌仍需人确认，同一证据只能结算一次。
 
@@ -158,7 +160,7 @@ node skills/use-agent-achievements/scripts/install-codex-hooks.mjs
 node skills/use-agent-achievements/scripts/achievement-cli.mjs avatar --input <图片路径>
 ```
 
-支持 PNG、JPG、WebP、SVG（不超过 5 MB）；`avatar --reset` 恢复默认奖杯。
+支持 PNG、JPG、WebP、SVG（不超过 5 MB）；`avatar --reset` 恢复默认的五行像素助手。默认助手使用四帧 PNG 动画，Windows 托盘使用五个元素围成一圈的独立位图图标。
 
 完整验证：
 

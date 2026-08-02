@@ -37,6 +37,8 @@ async function validator(schemaFile) {
 
 const fixtures = [
   ["packages/protocol/schemas/achievement.schema.json", "examples/wuxing-harness/product-gatekeeper.achievement.json"],
+  ["packages/protocol/schemas/achievement.schema.json", "skills/wuxing-harness/references/rule-gardener.achievement.json"],
+  ["packages/protocol/schemas/achievement.schema.json", "skills/wuxing-harness/references/product-gatekeeper.achievement.json"],
   ["packages/protocol/schemas/event.schema.json", "examples/wuxing-harness/judgment-requested.event.json"],
   ["packages/protocol/schemas/claim.schema.json", "examples/wuxing-harness/product-gatekeeper.claim.json"],
   ["packages/protocol/schemas/context-response.schema.json", "examples/wuxing-harness/agent-context.response.json"],

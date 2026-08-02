@@ -11,20 +11,10 @@ button { font: inherit; }
 .avatar { position: relative; width: 62px; height: 62px; display: grid; place-items: center; overflow: visible; border: 1px solid rgba(255,223,133,.26); border-radius: 21px; background: linear-gradient(150deg, rgba(44,39,59,.96), rgba(18,18,25,.96)); box-shadow: 0 6px 16px rgba(0,0,0,.3), 0 0 17px rgba(246,183,58,.15); animation: float 3.4s ease-in-out infinite; }
 .avatar:after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 1px 0 rgba(255,255,255,.13); pointer-events: none; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 20px; animation: breathe 3.4s ease-in-out infinite; }
-.trophy { width: 51px; height: 51px; filter: drop-shadow(0 5px 7px rgba(44,82,66,.28)); }
-.trophy-body { transform-origin: 32px 34px; animation: trophy-breathe 3.4s ease-in-out infinite; }
-.trophy-eye { transform-box: fill-box; transform-origin: center; animation: sleepy-blink 4.8s ease-in-out infinite; }
-.trophy-mouth { transform-origin: 32px 29px; transform: scaleY(.35); }
+.wuxing-spirit { width: 56px; height: 56px; display: block; background: url("wuxing-spirit.png") 0 0 / 224px 56px no-repeat; image-rendering: pixelated; filter: drop-shadow(0 5px 7px rgba(44,82,66,.28)); animation: spirit-idle 3.8s step-end infinite; }
 .pet-shell.online .avatar { border-color: rgba(255,223,133,.48); box-shadow: 0 6px 16px rgba(0,0,0,.3), 0 0 19px rgba(246,183,58,.28); }
-.pet-shell.online .trophy-eye { animation-name: awake-blink; }
-.pet-shell.online .trophy-mouth { transform: scaleY(1); }
-.pet-shell.online .trophy-handle.left { animation: wave-left 2.8s ease-in-out infinite; transform-origin: 21px 25px; }
-.pet-shell.online .trophy-handle.right { animation: wave-right 2.8s .18s ease-in-out infinite; transform-origin: 43px 25px; }
-.pet-spark { position: absolute; color: #ffe08a; font-size: 8px; opacity: 0; text-shadow: 0 0 8px #ffbf38; pointer-events: none; }
-.pet-spark.one { top: 7px; right: 7px; }.pet-spark.two { left: 8px; bottom: 8px; animation-delay: .55s !important; }
-.pet-shell.online .pet-spark { animation: sparkle 2.2s ease-in-out infinite; }
+.pet-shell.online .wuxing-spirit { animation-duration: 1.25s; }
 .pet-shell.celebrate .avatar { animation: celebrate .72s cubic-bezier(.2,.8,.2,1) 2; }
-.pet-shell.celebrate .pet-spark { animation: sparkle .45s ease-in-out 4; }
 .status-dot { position: absolute; right: 11px; bottom: 17px; width: 10px; height: 10px; border: 2px solid #171520; border-radius: 50%; background: #7e8290; box-shadow: none; }
 .pet-shell.online .status-dot { background: #6de5a6; box-shadow: 0 0 10px #6de5a6; }
 .pet-shell.idle .status-dot { background: #e5b85d; box-shadow: 0 0 9px rgba(229,184,93,.8); }
@@ -80,6 +70,10 @@ button { font: inherit; }
 .bar { height: 3px; display: block; overflow: hidden; border-radius: 3px; background: rgba(255,255,255,.09); }
 .bar i { height: 100%; display: block; background: linear-gradient(90deg, #9278e5, #f2c66d); }
 .cards .award { border-color: rgba(242,198,109,.16); }
+.pending-claims article { border-color: rgba(111,169,137,.2); }
+.claim-actions { margin-top: 8px; display: flex; gap: 6px; }
+.claim-actions button { padding: 5px 8px; color: #c9dcd2; border: 1px solid rgba(111,169,137,.24); border-radius: 7px; background: rgba(111,169,137,.08); font-size: .6rem; cursor: pointer; }
+.claim-actions button:first-child { color: #252014; border-color: #f0c96d; background: #f0c96d; }
 .empty { padding: 12px; color: #85808f; border: 1px dashed rgba(255,255,255,.1); border-radius: 10px; font-size: .72rem; text-align: center; }
 .companion-settings { margin-top: 13px; padding: 9px 11px; border: 1px solid rgba(255,255,255,.07); border-radius: 11px; color: #9b96a5; font-size: .72rem; }.companion-settings summary { cursor: pointer; }.companion-settings .appearance { margin: 10px 0 6px; }.companion-settings .setting-toggle { margin: 0; }.companion-settings input { width: 30px; height: 17px; accent-color: #f2c66d; cursor: pointer; }
 .panel footer { margin: 15px 0 -3px; color: #696675; font-size: .68rem; text-align: center; }
@@ -96,6 +90,7 @@ button { font: inherit; }
 @keyframes float { 0%,100% { transform: translateY(1px); } 50% { transform: translateY(-3px); } }
 @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
 @keyframes trophy-breathe { 0%,100% { transform: translateY(1px) scale(1); } 50% { transform: translateY(-1px) scale(1.025); } }
+@keyframes spirit-idle { 0%,22% { background-position-x: 0; } 23%,47% { background-position-x: -56px; } 48%,72% { background-position-x: -112px; } 73%,99% { background-position-x: -168px; } 100% { background-position-x: 0; } }
 @keyframes sleepy-blink { 0%,35%,39%,100% { transform: scaleY(.22); } 37% { transform: scaleY(.05); } }
 @keyframes awake-blink { 0%,45%,49%,100% { transform: scaleY(1); } 47% { transform: scaleY(.08); } }
 @keyframes wave-left { 0%,65%,100% { transform: rotate(0); } 74% { transform: rotate(-8deg); } 83% { transform: rotate(3deg); } }

@@ -21,6 +21,9 @@ test("server-renders the Wuxing Harness rule audit", async () => {
   assert.match(html, /给 AI 的规则做一次代谢/);
   assert.match(html, /发现的问题/);
   assert.match(html, /批准并覆盖/);
+  assert.match(html, /规则与成就闭环/);
+  assert.match(html, /规则园丁/);
+  assert.match(html, /反馈给 Agent/);
   assert.match(html, /href="\/install"/);
   assert.doesNotMatch(html, /五行创作调控|引水|改稿/);
 });
@@ -33,6 +36,7 @@ test("renders an install guide for Agent-led and manual setup", async () => {
   assert.match(html, /复制安装指令/);
   assert.match(html, /第一次怎么用/);
   assert.match(html, /skills\/wuxing-harness/);
+  assert.match(html, /use-agent-achievements/);
   assert.match(html, /工作区内容不会发到这个网站/);
 });
 

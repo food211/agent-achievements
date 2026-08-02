@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 export const SCHEMA_VERSION = "wuxing-harness/v1";
+export const ACHIEVEMENT_SCHEMA_VERSION = "agent-achievements/v1";
 
 export const RELATIONS = Object.freeze({
   fire_overcomes_metal: {
@@ -182,6 +183,51 @@ export function validateFinding(input) {
   finding.relation = definition.relation;
   finding.status = finding.status || "pending";
   return finding;
+}
+
+function achievementEvidence(item) {
+  const type = { test: "test", decision: "decision_record", run: "trace" }[item.type] || "external";
+  return { type, ref: item.ref, summary: item.summary };
+}
+
+export function buildAchievementEvent({ harnessEvent, finding, application = null, agentId = "wuxing-agent", taskId, taskType = "rule-maintenance" }) {
+  if (!harnessEvent?.event_id || !finding?.finding_id) throw new Error("achievement-event-input-incomplete");
+  const eventTypes = {
+    "finding.raised": "rule.conflict_detected",
+    "finding.approved": "judgment.resolved",
+    "finding.rejected": "judgment.resolved",
+    "finding.applied": "rule.revised"
+  };
+  const eventType = eventTypes[harnessEvent.event_type];
+  if (!eventType) return null;
+  const evidence = (finding.evidence || []).map(achievementEvidence);
+  if (application) {
+    evidence.push({ type: "decision_record", ref: application.application_id, summary: "人已批准这次规则修改。" });
+    for (const item of application.validation || []) evidence.push({ type: "test", ref: item, summary: "规则修改后完成验证。" });
+  }
+  const status = eventType === "rule.revised" ? "completed" : eventType === "judgment.resolved" ? "completed" : "observed";
+  const summary = eventType === "rule.revised"
+    ? `已按人的决定修改并验证规则：${finding.title}`
+    : eventType === "judgment.resolved"
+      ? `人已${finding.status === "rejected" ? "保留原规则" : "批准修改"}：${finding.title}`
+      : `发现一条有证据的规则问题：${finding.title}`;
+  return {
+    schema_version: ACHIEVEMENT_SCHEMA_VERSION,
+    event_id: `wuxing:${harnessEvent.event_id}`,
+    event_type: eventType,
+    occurred_at: harnessEvent.occurred_at,
+    source: { system: "wuxing-harness", version: "0.1.0" },
+    actor: { agent_id: agentId },
+    task: { id: taskId || finding.finding_id, type: taskType },
+    outcome: { status, summary },
+    evidence,
+    extensions: {
+      harness_event_id: harnessEvent.event_id,
+      finding_id: finding.finding_id,
+      relation: finding.relation,
+      human_decision_required: true
+    }
+  };
 }
 
 export class WuxingHarnessEngine {

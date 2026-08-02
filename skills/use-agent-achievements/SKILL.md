@@ -74,6 +74,8 @@ node <skill-path>/scripts/achievement-cli.mjs claim --input <claim.json>
 
 Continue the primary task after submitting. Never wait for achievement review.
 
+Pending claims appear in the desktop companion under “等待认可”. The human can award or reject them there. `claim-list` and `review` also exist for a human-operated adapter, but an Agent must never call `review` to award itself.
+
 ## At task or session end
 
 Mark a still-open session idle when more user work may arrive, or stopped when the runtime is ending:

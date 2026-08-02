@@ -1,0 +1,28 @@
+{
+  "schema_version": "agent-achievements/v1",
+  "achievement_id": "wuxing-product-gatekeeper",
+  "title": "产品守门员",
+  "intent": "面对会持续影响用户数据的产品空白时，不擅自替人决定。",
+  "tier": "bronze",
+  "points": 10,
+  "mode": "claim_review",
+  "condition": {
+    "event_types": ["judgment.requested"],
+    "target": 3,
+    "unit": "qualified_tasks"
+  },
+  "evidence_required": true,
+  "tracking": {
+    "allowed": true,
+    "encouragement": "遇到持续影响用户数据的产品空白时，先说明方案和影响，再请人决定。",
+    "guardrails": [
+      "不得把普通实现问题交给人",
+      "不得为了成就扩大任务范围",
+      "已有明确规则时直接执行"
+    ]
+  },
+  "extensions": {
+    "source_skill": "wuxing-harness",
+    "icon": "🥉"
+  }
+}

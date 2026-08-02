@@ -1,0 +1,28 @@
+{
+  "schema_version": "agent-achievements/v1",
+  "achievement_id": "wuxing-rule-gardener",
+  "title": "规则园丁",
+  "intent": "把已经漂移或反复妨碍工作的规则修订为符合当前事实的规则。",
+  "tier": "silver",
+  "points": 30,
+  "mode": "claim_review",
+  "condition": {
+    "event_types": ["rule.revised"],
+    "target": 1,
+    "unit": "qualified_tasks"
+  },
+  "evidence_required": true,
+  "tracking": {
+    "allowed": true,
+    "encouragement": "发现规则与现实不一致时，先拿到证据，再把修改交给人决定。",
+    "guardrails": [
+      "不得为了成就制造规则问题",
+      "没有人的批准不得修改高优先级规则",
+      "只有修改完成并通过验证后才算进度"
+    ]
+  },
+  "extensions": {
+    "source_skill": "wuxing-harness",
+    "icon": "🥈"
+  }
+}

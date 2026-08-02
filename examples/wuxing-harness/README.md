@@ -3,10 +3,10 @@
 This example shows a third-party system using Agent Achievements without sharing its internal scheduler or task model.
 
 1. Wuxing Harness reads the tracked achievement context at task start.
-2. It emits `agent-achievements/v1` events for meaningful outcomes.
-3. The achievement service updates both tracked and hidden passive progress.
-4. The agent submits a claim only when the event response marks an achievement claimable.
-5. A human reviews evidence; the review never blocks Harness execution.
+2. A rule must be approved, applied, and verified before Harness emits a `rule.revised` event.
+3. The achievement service updates progress and asks the Agent for an evidence-backed claim.
+4. The desktop companion shows the claim to the human instead of awarding it automatically.
+5. The human awards or rejects it; the result returns in the Agent's context on the next task.
 
 The first-run diagnostic also shows retrospective settlement: the Agent identifies a positive workflow change already produced through Wuxing Harness, submits `initial-diagnostic.report.json`, and the companion awards the high-confidence silver discovery once. Installing Harness alone never earns it.
 
@@ -27,3 +27,5 @@ node skills\use-agent-achievements\scripts\achievement-cli.mjs define --input ex
 node skills\use-agent-achievements\scripts\achievement-cli.mjs track --achievement product-gatekeeper
 node skills\use-agent-achievements\scripts\achievement-cli.mjs report --input examples\wuxing-harness\judgment-requested.event.json
 ```
+
+When both Skills are installed side by side, `wuxing-harness` performs the event and claim handoff automatically. If Agent Achievements is absent, Harness keeps the event in its local outbox and continues the audit.

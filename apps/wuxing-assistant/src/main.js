@@ -34,7 +34,6 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem("wuxing-harness-theme", theme);
   themeToggle.textContent = theme === "dark" ? "浅色" : "深色";
-  document.querySelector('meta[name="theme-color"]').content = theme === "dark" ? "#15201c" : "#ebe8de";
 }
 
 applyTheme(localStorage.getItem("wuxing-harness-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));

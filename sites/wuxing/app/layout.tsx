@@ -7,7 +7,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("x-forwarded-host") || requestHeaders.get("host") || "localhost";
   const protocol = requestHeaders.get("x-forwarded-proto") || (host.startsWith("localhost") ? "http" : "https");
   const image = `${protocol}://${host}/og.png`;
-  const description = "审查 AI 工作区积累的规则，找出与代码、测试和运行事实冲突的地方。";
+  const description = "审查 Agent 工作区的旧规则，把经过人批准和验证的改进变成成就，再反馈给下一次工作。";
   return {
     title: "五行 Harness",
     description,

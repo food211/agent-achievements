@@ -10,24 +10,7 @@
     <button class="pet-shell" id="pet" aria-label="展开五行 Harness 助手" title="五行 Harness 助手">
       <span class="avatar" aria-hidden="true">
         <img id="customAvatar" alt="" hidden />
-        <svg id="defaultAvatar" class="trophy wuxing-spirit" viewBox="0 0 64 64">
-          <defs>
-            <linearGradient id="spiritPaper" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#fff9e9"/><stop offset=".62" stop-color="#e8dfc9"/><stop offset="1" stop-color="#cbbd9e"/>
-            </linearGradient>
-          </defs>
-          <g class="trophy-body">
-            <path d="M17 20c1-7 8-11 15-11s14 4 15 11l3 21c1 8-6 14-18 14S13 49 14 41Z" fill="url(#spiritPaper)" stroke="#35584a" stroke-width="2"/>
-            <path class="trophy-handle left" d="M16 30c-6 1-8 5-8 10" fill="none" stroke="#35584a" stroke-width="4" stroke-linecap="round"/>
-            <path class="trophy-handle right" d="M48 30c6 1 8 5 8 10" fill="none" stroke="#35584a" stroke-width="4" stroke-linecap="round"/>
-            <path d="M20 18c-3-5-2-9 1-12 5 3 6 7 4 12" fill="#6ba9b6"/><path d="M25 15c0-7 3-11 7-13 3 5 2 10-1 14" fill="#6e9b70"/><path d="M32 15c2-7 7-9 9-13 3 7 1 11-3 16" fill="#bc5542"/><rect x="40" y="9" width="8" height="9" rx="2" fill="#a58351"/><path d="m47 18 8-9" stroke="#aeb6b3" stroke-width="5" stroke-linecap="round"/>
-            <ellipse class="trophy-eye left" cx="26" cy="31" rx="2" ry="2.6" fill="#29483d"/>
-            <ellipse class="trophy-eye right" cx="38" cy="31" rx="2" ry="2.6" fill="#29483d"/>
-            <path class="trophy-mouth" d="M27 38c3 2.5 7 2.5 10 0" fill="none" stroke="#8e4d3e" stroke-width="1.6" stroke-linecap="round"/>
-            <path class="trophy-shine" d="M20 24c5-4 9-5 14-4" fill="none" stroke="#fffdf4" stroke-width="2" stroke-linecap="round" opacity=".8"/>
-          </g>
-        </svg>
-        <span class="pet-spark one">✦</span><span class="pet-spark two">✦</span>
+        <span id="defaultAvatar" class="wuxing-spirit"></span>
       </span>
       <span class="status-dot"></span>
     </button>
@@ -62,6 +45,8 @@
       <div id="tracked" class="cards"></div>
       <div class="section-title"><span>最近获得</span><small>人的认可</small></div>
       <div id="awards" class="cards"></div>
+      <div class="section-title"><span>等待认可</span><small>Agent 提交的证据</small></div>
+      <div id="pendingClaims" class="cards pending-claims"></div>
       <details class="companion-settings no-drag">
         <summary>桌面伙伴设置</summary>
         <div class="appearance">

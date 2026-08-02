@@ -273,11 +273,12 @@ async function define() {
     fail("ACHIEVEMENT_INVALID", "achievement_id, title, condition.event_types, and tracking are required", "achievement");
   }
   const index = state.achievements.findIndex((item) => item.achievement_id === achievement.achievement_id);
-  if (index >= 0) state.achievements[index] = achievement;
-  else state.achievements.push(achievement);
+  const preserved = index >= 0 && args.includes("--if-absent");
+  if (index < 0) state.achievements.push(achievement);
+  else if (!preserved) state.achievements[index] = achievement;
   state.progress[achievement.achievement_id] ??= 0;
   await saveState(state);
-  process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: { achievement_id: achievement.achievement_id, created: index < 0 }, next_actions: [] }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: { achievement_id: achievement.achievement_id, created: index < 0, preserved }, next_actions: [] }, null, 2)}\n`);
 }
 
 async function track() {
@@ -340,6 +341,58 @@ async function claim() {
   process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: { claim_id: claim.claim_id, status: "pending_human_review", message: "Continue the primary task; achievement review is non-blocking." }, next_actions: [] }, null, 2)}\n`);
 }
 
-const commands = { init, presence, avatar, define, track, context, report, claim, "design-request": designRequest, "design-list": designList, "design-submit": designSubmit, "diagnostic-request": diagnosticRequest, "diagnostic-list": diagnosticList, "diagnostic-submit": diagnosticSubmit };
-if (!commands[command]) fail("COMMAND_UNKNOWN", "Use init, presence, avatar, define, track, context, report, claim, design-request, design-list, design-submit, diagnostic-request, diagnostic-list, or diagnostic-submit", "command");
+async function claimList() {
+  await loadState();
+  const claims = existsSync(claimsPath)
+    ? (await readFile(claimsPath, "utf8")).split(/\r?\n/).filter(Boolean).map(JSON.parse)
+    : [];
+  const status = option("status", "pending_human_review");
+  process.stdout.write(`${JSON.stringify({ schema_version: VERSION, claims: status ? claims.filter((item) => item.status === status) : claims }, null, 2)}\n`);
+}
+
+async function review() {
+  const state = await loadState();
+  const claimId = option("claim");
+  const decision = option("decision");
+  const feedback = String(option("feedback", "")).trim();
+  if (!claimId || !new Set(["award", "reject"]).has(decision)) fail("REVIEW_INVALID", "Pass --claim and --decision award|reject", "review");
+  if (!feedback) fail("REVIEW_FEEDBACK_REQUIRED", "Human feedback is required", "feedback");
+  const claims = existsSync(claimsPath)
+    ? (await readFile(claimsPath, "utf8")).split(/\r?\n/).filter(Boolean).map(JSON.parse)
+    : [];
+  const pending = claims.find((item) => item.claim_id === claimId);
+  if (!pending) fail("CLAIM_NOT_FOUND", `Unknown claim: ${claimId}`, "claim_id");
+  if (pending.status !== "pending_human_review") fail("CLAIM_ALREADY_REVIEWED", `Claim is ${pending.status}`, "claim_id");
+  pending.status = decision === "award" ? "awarded" : "rejected";
+  pending.reviewed_at = new Date().toISOString();
+  pending.human_feedback = feedback;
+  let award = null;
+  if (decision === "award") {
+    const achievement = state.achievements.find((item) => item.achievement_id === pending.achievement_id);
+    if (!achievement) fail("ACHIEVEMENT_NOT_FOUND", `Unknown achievement: ${pending.achievement_id}`, "achievement_id");
+    if ((state.progress[pending.achievement_id] || 0) < achievement.condition.target) fail("ACHIEVEMENT_NOT_EARNED", "Achievement target has not been reached", "achievement_id");
+    award = state.awards.find((item) => item.achievement_id === pending.achievement_id && item.agent_id === pending.agent_id) || null;
+    if (!award) {
+      const tier = achievementTier(achievement);
+      award = {
+        award_id: `award-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+        achievement_id: pending.achievement_id,
+        agent_id: pending.agent_id,
+        awarded_at: pending.reviewed_at,
+        awarded_by: "human",
+        points: tier.points,
+        human_feedback: feedback.slice(0, 600),
+        evidence_summary: pending.summary.slice(0, 600),
+        evidence: pending.evidence.slice(0, 12)
+      };
+      state.awards.push(award);
+    }
+    await saveState(state);
+  }
+  await writeFile(claimsPath, claims.length ? `${claims.map((item) => JSON.stringify(item)).join("\n")}\n` : "", "utf8");
+  process.stdout.write(`${JSON.stringify({ schema_version: VERSION, ok: true, data: { claim_id: claimId, status: pending.status, award }, next_actions: [] }, null, 2)}\n`);
+}
+
+const commands = { init, presence, avatar, define, track, context, report, claim, "claim-list": claimList, review, "design-request": designRequest, "design-list": designList, "design-submit": designSubmit, "diagnostic-request": diagnosticRequest, "diagnostic-list": diagnosticList, "diagnostic-submit": diagnosticSubmit };
+if (!commands[command]) fail("COMMAND_UNKNOWN", "Use init, presence, avatar, define, track, context, report, claim, claim-list, review, design-request, design-list, design-submit, diagnostic-request, diagnostic-list, or diagnostic-submit", "command");
 await commands[command]();

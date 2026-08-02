@@ -11,6 +11,7 @@ const PRESENCE_PATH = path.join(DATA_HOME, "presence.json");
 const SETTINGS_PATH = path.join(DATA_HOME, "companion-settings.json");
 const DESIGN_REQUESTS_PATH = path.join(DATA_HOME, "achievement-design-requests.json");
 const DIAGNOSTICS_PATH = path.join(DATA_HOME, "achievement-diagnostics.json");
+const CLAIMS_PATH = path.join(DATA_HOME, "claims.jsonl");
 const COLLAPSED = { width: 94, height: 100 };
 const EXPANDED = { width: 430, height: 650 };
 const SNAP_DISTANCE = 34;
@@ -51,6 +52,18 @@ function writeJsonAtomic(file, value) {
   const temporary = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
   fs.renameSync(temporary, file);
+}
+
+function writeTextAtomic(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const temporary = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, value, "utf8");
+  fs.renameSync(temporary, file);
+}
+
+function claimRecords() {
+  try { return fs.readFileSync(CLAIMS_PATH, "utf8").split(/\r?\n/).filter(Boolean).map(JSON.parse); }
+  catch { return []; }
 }
 
 function activeSessions() {
@@ -192,13 +205,40 @@ function currentPayload() {
   const latestDiagnostic = (diagnostics.requests || []).at(-1) || null;
   const settledIds = new Set(latestDiagnostic?.settled_discovery_ids || []);
   const pendingDiscoveries = (latestDiagnostic?.report?.discoveries || []).filter((item) => !settledIds.has(item.discovery_id));
-  return { dataHome: DATA_HOME, sessions, tracked, awards, catalog, designs, score, avatar: readAvatar(), diagnostic: latestDiagnostic ? {
+  const claims = claimRecords().filter((item) => item.status === "pending_human_review").slice(-5).reverse().map((claim) => {
+    const achievement = achievements.find((item) => item.achievement_id === claim.achievement_id);
+    const tier = tierMetadata(achievement);
+    return { claim_id: claim.claim_id, title: achievement?.title || claim.achievement_id, summary: claim.summary, evidence_count: claim.evidence?.length || 0, tier_label: { bronze: "铜牌", silver: "银牌", gold: "金牌" }[tier.tier] || "铜牌", ...tier };
+  });
+  return { dataHome: DATA_HOME, sessions, tracked, awards, claims, catalog, designs, score, avatar: readAvatar(), diagnostic: latestDiagnostic ? {
     request_id: latestDiagnostic.request_id,
     reason: latestDiagnostic.reason,
     status: latestDiagnostic.status,
     scanned_skills: latestDiagnostic.report?.sources?.skills?.length || 0,
     pending_discoveries: pendingDiscoveries
   } : null };
+}
+
+function reviewClaim(claimId, decision) {
+  if (!new Set(["award", "reject"]).has(decision)) throw new Error("claim-decision-invalid");
+  const claims = claimRecords();
+  const claim = claims.find((item) => item.claim_id === String(claimId));
+  if (!claim || claim.status !== "pending_human_review") throw new Error("claim-not-found");
+  const state = readJson(STATE_PATH, { schema_version: "agent-achievements/v1", achievements: [], progress: {}, tracked: [], awards: [], processed_event_ids: [] });
+  const achievement = state.achievements.find((item) => item.achievement_id === claim.achievement_id);
+  if (!achievement) throw new Error("achievement-not-found");
+  claim.status = decision === "award" ? "awarded" : "rejected";
+  claim.reviewed_at = new Date().toISOString();
+  claim.human_feedback = decision === "award" ? "我认可这次有证据的改进。" : "这次不授予成就。";
+  if (decision === "award" && !state.awards.some((item) => item.achievement_id === claim.achievement_id && item.agent_id === claim.agent_id)) {
+    const tier = tierMetadata(achievement);
+    state.awards.push({ award_id: `award-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, achievement_id: claim.achievement_id, agent_id: claim.agent_id, awarded_at: claim.reviewed_at, awarded_by: "human", points: tier.points, human_feedback: claim.human_feedback, evidence_summary: claim.summary.slice(0, 600), evidence: (claim.evidence || []).slice(0, 12) });
+    writeJsonAtomic(STATE_PATH, state);
+  }
+  writeTextAtomic(CLAIMS_PATH, `${claims.map((item) => JSON.stringify(item)).join("\n")}\n`);
+  lastPayload = "";
+  sync();
+  return { claim_id: claim.claim_id, status: claim.status };
 }
 
 function currentWorkArea() {
@@ -544,6 +584,7 @@ if (!hasSingleInstanceLock) {
     ipcMain.handle("companion:request-achievement-design", (_event, brief) => requestAchievementDesign(brief));
     ipcMain.handle("companion:request-achievement-diagnostic", () => requestAchievementDiagnostic());
     ipcMain.handle("companion:confirm-diagnostic-discovery", (_event, requestId, discoveryId) => confirmDiagnosticDiscovery(requestId, discoveryId));
+    ipcMain.handle("companion:review-claim", (_event, claimId, decision) => reviewClaim(claimId, decision));
     screen.on("display-metrics-changed", () => placeWindow({ peek: Boolean(companionSettings.dock) && !expanded }));
     setInterval(sync, 1000).unref();
     sync();

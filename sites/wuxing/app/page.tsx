@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import "./loop.css";
 
 type Status = "pending" | "applied" | "rejected";
 type Finding = {
@@ -95,6 +96,7 @@ export default function Home() {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [findings, setFindings] = useState<Finding[]>(INITIAL_FINDINGS);
   const [selected, setSelected] = useState(INITIAL_FINDINGS[0].id);
+  const [achievementAwarded, setAchievementAwarded] = useState(false);
 
   useEffect(() => {
     const storedTheme = localStorage.getItem("wuxing-harness-theme") as "light" | "dark" | null;
@@ -102,6 +104,7 @@ export default function Home() {
     try {
       const stored = JSON.parse(localStorage.getItem("wuxing-harness-demo") || "null");
       if (Array.isArray(stored) && stored.length === INITIAL_FINDINGS.length) setFindings(stored);
+      setAchievementAwarded(localStorage.getItem("wuxing-harness-awarded") === "true");
     } catch { /* keep the demo fixture */ }
   }, []);
 
@@ -112,6 +115,7 @@ export default function Home() {
 
   const finding = findings.find((item) => item.id === selected) || findings[0];
   const pending = useMemo(() => findings.filter((item) => item.status === "pending").length, [findings]);
+  const applied = useMemo(() => findings.filter((item) => item.status === "applied").length, [findings]);
 
   function decide(status: Status) {
     const next = findings.map((item) => item.id === selected ? { ...item, status } : item);
@@ -124,6 +128,13 @@ export default function Home() {
     setFindings(next);
     setSelected(next[0].id);
     localStorage.removeItem("wuxing-harness-demo");
+    localStorage.removeItem("wuxing-harness-awarded");
+    setAchievementAwarded(false);
+  }
+
+  function awardAchievement() {
+    setAchievementAwarded(true);
+    localStorage.setItem("wuxing-harness-awarded", "true");
   }
 
   return (
@@ -135,7 +146,7 @@ export default function Home() {
       </header>
 
       <section className="hero">
-        <div><span className="eyebrow">这次审查</span><h2>规则还在，事实已经往前走了。</h2><p>Harness 对照规则、代码、测试和运行记录，把冲突带到你面前。你决定以后，它才会覆盖旧规则。</p></div>
+        <div><span className="eyebrow">规则与成就闭环</span><h2>规则改对了，也让 Agent 知道这次做对了什么。</h2><p>Harness 找出与事实不一致的旧规则，由你决定是否修改。改完并通过验证后，Agent 才能提交成就申请；你的认可会回到它下一次工作的上下文里。</p></div>
         <div className="metrics" aria-label="审查统计">
           <Metric value="3" label="条规则被对照" />
           <Metric value={String(findings.length)} label="项问题带着证据" />
@@ -152,6 +163,16 @@ export default function Home() {
         <div className="water-stop"><Control element="水" className="water" title="现实影响先叫停" note="自动任务和数据同步先问人" /></div>
       </section>
 
+      <section className="achievement-loop" aria-label="五行 Harness 与 Agent 成就闭环">
+        <div className="loop-intro"><small>一次完整循环</small><b>规则代谢之后，留下可复用的认可</b></div>
+        <div className="loop-steps">
+          <LoopStep index="01" title="发现旧规则" note="代码和运行结果提供证据" state="done" />
+          <LoopStep index="02" title="人来决定" note={applied ? "已有规则得到批准并修改" : "批准、拒绝都由人选择"} state={applied ? "done" : "current"} />
+          <LoopStep index="03" title="申请规则园丁" note={applied ? "修改已验证，申请可以提交" : "没有实际修改，不计算成就"} state={achievementAwarded ? "done" : applied ? "current" : "waiting"} />
+          <LoopStep index="04" title="反馈给 Agent" note={achievementAwarded ? "人的认可会出现在下次任务里" : "授予后才会进入 Agent 上下文"} state={achievementAwarded ? "done" : "waiting"} />
+        </div>
+      </section>
+
       <section className="audit-layout">
         <aside className="findings-panel">
           <div className="section-head"><div><small>待你判断</small><h2>发现的问题</h2></div><button className="quiet-button" onClick={reset}>重新演示</button></div>
@@ -164,7 +185,7 @@ export default function Home() {
           <div className="expectation-grid"><section><small>原本希望</small><p>{finding.expected}</p></section><section><small>实际发生</small><p>{finding.observed}</p></section></div>
           <section className="evidence-block"><small>触发 {finding.triggerCount} 次 · {finding.contradictionCount} 次结果与预期相反 · 证据 {finding.evidence.length} 条</small>{finding.evidence.map((item) => <article key={item.ref}><span>{item.type}</span><div><b>{item.summary}</b><code>{item.ref}</code></div></article>)}</section>
           <section className="proposal-block"><small>建议直接替换成</small><blockquote>{finding.replacement}</blockquote><div><p><b>为什么改</b>{finding.reason}</p><p><b>影响哪里</b>{finding.impact}</p><p><b>怎么恢复</b>{finding.reversibility}</p></div></section>
-          {finding.status === "pending" ? <div className="decision-bar"><button className="approve" onClick={() => decide("applied")}>批准并覆盖</button><button onClick={() => decide("rejected")}>先不改</button><small>Harness 不会替你做这个判断</small></div> : <p className="settled-note">{finding.status === "applied" ? "你批准了这项修改。旧规则已经被新文本覆盖，历史留在版本控制里。" : "你保留了原规则。这项发现仍在记录中，不会悄悄变成修改。"}</p>}
+          {finding.status === "pending" ? <div className="decision-bar"><button className="approve" onClick={() => decide("applied")}>批准并覆盖</button><button onClick={() => decide("rejected")}>先不改</button><small>Harness 不会替你做这个判断</small></div> : <><p className="settled-note">{finding.status === "applied" ? "你批准了这项修改。旧规则已经被新文本覆盖，历史留在版本控制里。" : "你保留了原规则。这项发现仍在记录中，不会悄悄变成修改。"}</p>{finding.status === "applied" && <section className={`achievement-claim ${achievementAwarded ? "awarded" : ""}`}><div className="achievement-medal">{achievementAwarded ? "✓" : "金"}</div><div><small>{achievementAwarded ? "已获得 · 银牌 · 30 分" : "成就申请 · 等待人的认可"}</small><h3>规则园丁</h3><p>{achievementAwarded ? "“我认可这次有证据的改进。”这句话会在 Agent 下次工作时出现。" : "Agent 找到有证据的旧规则，经你批准完成修改，并通过了验证。"}</p></div>{!achievementAwarded && <button onClick={awardAchievement}>认可并授予</button>}</section>}</>}
         </article>
       </section>
 
@@ -175,3 +196,4 @@ export default function Home() {
 
 function Metric({ value, label }: { value: string; label: string }) { return <div><strong>{value}</strong><span>{label}</span></div>; }
 function Control({ element, className, title, note }: { element: string; className: string; title: string; note: string }) { return <div><span className={`node ${className}`}>{element}</span><b>{title}</b><small>{note}</small></div>; }
+function LoopStep({ index, title, note, state }: { index: string; title: string; note: string; state: "done" | "current" | "waiting" }) { return <article className={state}><span>{state === "done" ? "✓" : index}</span><div><b>{title}</b><small>{note}</small></div></article>; }
