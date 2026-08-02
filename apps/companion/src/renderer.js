@@ -187,9 +187,10 @@ function render(payload) {
   agentConversation.hidden = !conversation;
   if (conversation) {
     const busy = ["connecting", "streaming"].includes(conversation.status);
+    const unavailable = conversation.status === "offline";
     agentConversationActivity.textContent = conversation.error || conversation.activity || "";
-    agentReply.disabled = busy;
-    agentReplyForm.querySelector("button").disabled = busy;
+    agentReply.disabled = busy || unavailable;
+    agentReplyForm.querySelector("button").disabled = agentReply.disabled;
     const messages = [...(conversation.messages || [])];
     if (conversation.status === "streaming" && conversation.output) messages.push({ role: "assistant", text: conversation.output, live: true });
     agentMessages.innerHTML = messages.map((item) => `<article class="${item.role === "user" ? "from-user" : "from-agent"}${item.live ? " live" : ""}"><small>${item.role === "user" ? "你" : "当前 Agent"}</small><p>${escapeHtml(item.text)}</p></article>`).join("");

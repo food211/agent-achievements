@@ -69,11 +69,23 @@ function safeBridgeCommand(adapter, options = {}) {
   return { program, args: [script, ...args.slice(1)], cwd };
 }
 
+function stopSupervisedBridges(supervised) {
+  if (!supervised) return;
+  for (const record of supervised.values()) {
+    record.running = false;
+    try {
+      if (record.child && !record.child.killed) record.child.kill();
+    } catch { /* The bridge has already exited. */ }
+  }
+  supervised.clear();
+}
+
 module.exports = {
   BRIDGE_RESTART_COOLDOWN_MS,
   BRIDGE_STATUS_MAX_AGE_MS,
   BRIDGE_SWEEP_INTERVAL_MS,
   bridgeStatusIsFresh,
   processIsAlive,
-  safeBridgeCommand
+  safeBridgeCommand,
+  stopSupervisedBridges
 };

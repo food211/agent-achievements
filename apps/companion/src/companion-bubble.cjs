@@ -45,13 +45,9 @@ function bubbleMessage(previous, current) {
       body: clippedText(response || "Agent 已经完成这一轮诊断，点我查看。")
     };
   }
-  if (after?.status === "failed" && before?.status !== "failed") {
-    return {
-      kind: "error",
-      title: "这条消息没有处理完成",
-      body: clippedText(after.error || after.activity || "点我查看原因。")
-    };
-  }
+  // Connection loss is a recoverable desktop state, not an Agent outcome.
+  // Keep it in the chat panel where the reconnect status is actionable;
+  // a floating failure bubble only adds noise and contradicts that recovery.
   return null;
 }
 

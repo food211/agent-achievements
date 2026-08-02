@@ -10,7 +10,8 @@ const {
   BRIDGE_SWEEP_INTERVAL_MS,
   bridgeStatusIsFresh,
   processIsAlive,
-  safeBridgeCommand
+  safeBridgeCommand,
+  stopSupervisedBridges
 } = require("../apps/companion/src/bridge-supervisor.cjs");
 
 test("fresh bridge status also requires a live process", () => {
@@ -57,4 +58,17 @@ test("bridge supervisor validates an explicit data home before launching", () =>
 test("bridge supervision retries quickly after a dead process", () => {
   assert.ok(BRIDGE_SWEEP_INTERVAL_MS <= 1_000);
   assert.ok(BRIDGE_RESTART_COOLDOWN_MS <= 2_000);
+});
+
+test("quitting the companion stops every bridge it started", () => {
+  let killed = 0;
+  const records = new Map([
+    ["agent-a", { running: true, child: { killed: false, kill: () => { killed += 1; } } }],
+    ["agent-b", { running: true, child: { killed: true, kill: () => { killed += 1; } } }]
+  ]);
+
+  stopSupervisedBridges(records);
+
+  assert.equal(killed, 1);
+  assert.equal(records.size, 0);
 });

@@ -24,6 +24,10 @@ test("the bubble announces only new Agent outcomes after initial state", () => {
     title: "Agent 获得新奖杯",
     body: "🏆 规则园丁 · +30 分"
   });
+  assert.equal(bubbleMessage(base, {
+    ...base,
+    agentConversation: { status: "failed", error: "ACP process exited", messages: [] }
+  }), null, "recoverable connection failures stay in the chat status instead of interrupting with a bubble");
 });
 
 test("the bubble stays inside the display and chooses the useful side of the pet", () => {

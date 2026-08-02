@@ -35,6 +35,25 @@ function childEnvironment(environment = process.env, versions = process.versions
   };
 }
 
+function acpSpawnOptions(entry, launch = {}, options = {}) {
+  return {
+    cwd: entry.workspace,
+    // VS Code and terminal hosts can terminate their shared Windows console
+    // group during shutdown.  ACP is owned by the companion, so it needs its
+    // own process group and must not inherit that Ctrl+C lifecycle.
+    detached: process.platform === "win32",
+    windowsHide: true,
+    shell: false,
+    stdio: ["pipe", "pipe", "pipe"],
+    env: {
+      ...childEnvironment(),
+      ...(launch.env || {}),
+      INITIAL_AGENT_MODE: "read-only",
+      APP_SERVER_LOGS: path.join(options.dataHome || entry.workspace, "codex-acp-logs")
+    }
+  };
+}
+
 function permissionOutcome(request, options = {}) {
   // A desktop conversation must not silently turn into a shell approval
   // surface.  ACP agents may ask for network or broader sandbox escalation as
@@ -246,18 +265,7 @@ function createCodexAcpClient(options = {}) {
       ? options.launch(entry)
       : { program: process.execPath, args: [resolveAgentPath()], env: {} };
     if (!launch?.program || !Array.isArray(launch.args)) throw new Error(`${errorPrefix}-launch-invalid`);
-    entry.child = spawnProcess(launch.program, launch.args, {
-      cwd: entry.workspace,
-      windowsHide: true,
-      shell: false,
-      stdio: ["pipe", "pipe", "pipe"],
-      env: {
-        ...childEnvironment(),
-        ...(launch.env || {}),
-        INITIAL_AGENT_MODE: "read-only",
-        APP_SERVER_LOGS: path.join(options.dataHome || entry.workspace, "codex-acp-logs")
-      }
-    });
+    entry.child = spawnProcess(launch.program, launch.args, acpSpawnOptions(entry, launch, options));
     attachOutput(entry);
     entry.child.once("error", (error) => {
       rejectPending(entry, error);
@@ -266,7 +274,9 @@ function createCodexAcpClient(options = {}) {
     entry.child.once("exit", (code, signal) => {
       if (entry.closing) return;
       const detail = entry.stderr.trim().split(/\r?\n/).at(-1);
-      const error = new Error(detail || `${adapterName} ACP 已退出（${signal || code}）`);
+      const reason = signal || `code ${code}`;
+      const suffix = detail ? `：${clipped(detail, 500)}` : "";
+      const error = new Error(`${adapterName} ACP process exited (${reason})${suffix}`);
       rejectPending(entry, error);
       setEntry(entry, { status: "failed", error: error.message, completedAt: new Date().toISOString() });
       sessions.delete(entry.workspace);
@@ -287,6 +297,7 @@ function createCodexAcpClient(options = {}) {
     const canLoad = initialized?.agentCapabilities?.loadSession === true;
     const forceLoad = Boolean(selection);
     let resumed = false;
+    let replacedUnrestorableSession = false;
     if (saved?.session_id && (canResume || canLoad)) {
       entry.sessionId = saved.session_id;
       entry.messages = Array.isArray(saved.messages) ? saved.messages.slice(-12) : [];
@@ -308,7 +319,16 @@ function createCodexAcpClient(options = {}) {
         }
         resumed = true;
       } catch (error) {
-        throw new Error(`codex-acp-session-restore-failed:${saved.session_id}:${error.message}`);
+        if (forceLoad) throw new Error(`codex-acp-session-restore-failed:${saved.session_id}:${error.message}`);
+        // A newly created ACP session may not exist on disk until its first
+        // turn completes.  Persisting that empty id used to make every future
+        // startup retry an impossible restore forever.  Keep the real Codex
+        // history untouched, forget only the companion pointer, and continue
+        // with a fresh local session.
+        sessionStore.remove(entry.workspace);
+        entry.sessionId = null;
+        entry.messages = [];
+        replacedUnrestorableSession = true;
       } finally {
         entry.restoring = false;
         entry.captureHistory = false;
@@ -321,8 +341,15 @@ function createCodexAcpClient(options = {}) {
       if (!session?.sessionId) throw new Error("codex-acp-session-missing");
       entry.sessionId = session.sessionId;
     }
-    saveEntry(entry);
-    setEntry(entry, { status: "ready", activity: resumed ? `已恢复 ${adapterName} 助手对话，等待消息` : `${adapterName} 已连接，等待消息` });
+    if (resumed) saveEntry(entry);
+    setEntry(entry, {
+      status: "ready",
+      activity: resumed
+        ? `已恢复 ${adapterName} 助手对话，等待消息`
+        : replacedUnrestorableSession
+          ? `旧对话暂时无法恢复，已开始新的 ${adapterName} 助手对话`
+          : `${adapterName} 已连接，等待消息`
+    });
     return entry;
   }
 
@@ -376,7 +403,6 @@ function createCodexAcpClient(options = {}) {
     if (entry.running) throw new Error("codex-acp-prompt-in-progress");
     entry.messages.push({ role: "user", text: clipped(runOptions.displayText || prompt, 1000), at: new Date().toISOString() });
     if (entry.messages.length > 12) entry.messages.splice(0, entry.messages.length - 12);
-    saveEntry(entry);
     setEntry(entry, {
       status: "streaming",
       output: "",
@@ -393,8 +419,8 @@ function createCodexAcpClient(options = {}) {
       if (entry.output.trim()) {
         entry.messages.push({ role: "assistant", text: entry.output.trim(), at: new Date().toISOString() });
         if (entry.messages.length > 12) entry.messages.splice(0, entry.messages.length - 12);
-        saveEntry(entry);
       }
+      saveEntry(entry);
       setEntry(entry, {
         status,
         activity: status === "completed" ? "本轮对话已完成" : `本轮已停止：${response?.stopReason || "unknown"}`,
@@ -431,8 +457,7 @@ function createCodexAcpClient(options = {}) {
   }
 
   async function connect(workspace) {
-    const entry = await ensureSession(workspace);
-    return publicState(entry);
+    return withReadableSession(workspace, async (entry) => publicState(entry));
   }
 
   async function resetSession(workspace) {
@@ -456,24 +481,39 @@ function createCodexAcpClient(options = {}) {
 
   async function listSessions(workspace) {
     const normalized = path.resolve(workspace);
-    const entry = await ensureSession(normalized);
-    if (entry.running && entry.status === "streaming") throw new Error("codex-acp-prompt-in-progress");
-    if (entry.capabilities?.list === undefined) throw new Error(`${errorPrefix}-session-list-unsupported`);
-    const listed = [];
-    let cursor = null;
-    do {
-      const response = await request(entry, "session/list", { cwd: normalized, cursor });
-      listed.push(...(response?.sessions || []));
-      cursor = response?.nextCursor || null;
-    } while (cursor && listed.length < 120);
-    return listed
-      .filter((item) => item?.sessionId && item?.cwd && sameWorkspace(item.cwd, normalized))
-      .map((item) => ({
-        session_id: String(item.sessionId),
-        workspace: path.resolve(item.cwd),
-        title: String(item.title || "未命名对话").replace(/\s+/g, " ").trim().slice(0, 80),
-        updated_at: item.updatedAt || null
-      }));
+    return withReadableSession(normalized, async (entry) => {
+      if (entry.running && entry.status === "streaming") throw new Error("codex-acp-prompt-in-progress");
+      if (entry.capabilities?.list === undefined) throw new Error(`${errorPrefix}-session-list-unsupported`);
+      const listed = [];
+      let cursor = null;
+      do {
+        const response = await request(entry, "session/list", { cwd: normalized, cursor });
+        listed.push(...(response?.sessions || []));
+        cursor = response?.nextCursor || null;
+      } while (cursor && listed.length < 120);
+      return listed
+        .filter((item) => item?.sessionId && item?.cwd && sameWorkspace(item.cwd, normalized))
+        .map((item) => ({
+          session_id: String(item.sessionId),
+          workspace: path.resolve(item.cwd),
+          title: String(item.title || "未命名对话").replace(/\s+/g, " ").trim().slice(0, 80),
+          updated_at: item.updatedAt || null
+        }));
+    });
+  }
+
+  async function withReadableSession(workspace, action) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await action(await ensureSession(workspace));
+      } catch (error) {
+        if (attempt > 0 || !/ACP process exited|codex-acp-not-running|codex-acp-timeout/.test(String(error?.message || error))) throw error;
+      }
+      // Retrying a read-only startup/list action is safe.  Do not apply this
+      // to session/prompt: a server might have accepted the prompt before its
+      // transport died, and retrying it could execute the user request twice.
+    }
+    throw new Error(`${errorPrefix}-read-session-retry-exhausted`);
   }
 
   async function switchSession(workspace, sessionId) {
@@ -512,4 +552,4 @@ function createCodexAcpClient(options = {}) {
   return { connect, listSessions, resetSession, runPrompt, stateFor, stop, switchSession };
 }
 
-module.exports = { MAX_OUTPUT_CHARS, PROTOCOL_VERSION, SESSION_STORE_VERSION, childEnvironment, createCodexAcpClient, createSessionStore, permissionOutcome, updateSummary };
+module.exports = { MAX_OUTPUT_CHARS, PROTOCOL_VERSION, SESSION_STORE_VERSION, acpSpawnOptions, childEnvironment, createCodexAcpClient, createSessionStore, permissionOutcome, updateSummary };

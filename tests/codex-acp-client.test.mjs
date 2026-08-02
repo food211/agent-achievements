@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 
 const require = createRequire(import.meta.url);
-const { childEnvironment, createCodexAcpClient, permissionOutcome, updateSummary } = require("../apps/companion/src/codex-acp-client.cjs");
+const { acpSpawnOptions, childEnvironment, createCodexAcpClient, permissionOutcome, updateSummary } = require("../apps/companion/src/codex-acp-client.cjs");
 
 function fakeCodexAcp(options = {}) {
   const child = new EventEmitter();
@@ -68,6 +68,13 @@ test("ACP updates become human-readable companion activity", () => {
 test("Electron launches the ACP adapter in Node mode", () => {
   assert.equal(childEnvironment({ PATH: "test" }, { electron: "43.2.0" }).ELECTRON_RUN_AS_NODE, "1");
   assert.equal(childEnvironment({ PATH: "test" }, { node: "22.0.0" }).ELECTRON_RUN_AS_NODE, undefined);
+});
+
+test("the companion launches ACP in a separate hidden Windows process group", () => {
+  const launch = acpSpawnOptions({ workspace: process.cwd() }, {}, { dataHome: "C:/companion" });
+  assert.equal(launch.windowsHide, true);
+  assert.equal(launch.detached, process.platform === "win32");
+  assert.equal(launch.shell, false);
 });
 
 test("read-only sessions reject commands unless a narrow explicit policy permits one", () => {
@@ -164,7 +171,7 @@ test("a failed resume falls back to load without creating a new session", async 
   assert.equal(child.requests.some((item) => item.method === "session/new"), false);
 });
 
-test("failed restore preserves the saved session instead of silently replacing it", async (t) => {
+test("an automatically restored stale session falls back once to a fresh conversation", async (t) => {
   const dataHome = await mkdtemp(path.join(os.tmpdir(), "companion-acp-preserve-"));
   t.after(() => rm(dataHome, { recursive: true, force: true }));
   const workspace = process.cwd();
@@ -184,10 +191,11 @@ test("failed restore preserves the saved session instead of silently replacing i
     spawnProcess: () => (child = fakeCodexAcp({ resume: true, resumeFailure: true, load: true, loadFailure: true }))
   });
   t.after(() => second.stop());
-  await assert.rejects(second.connect(workspace), /codex-acp-session-restore-failed:preserved-session/);
-  assert.equal(child.requests.some((item) => item.method === "session/new"), false);
-  assert.equal(second.stateFor(workspace).session_id, "preserved-session");
-  assert.ok(second.stateFor(workspace).messages.some((item) => item.text === "第一轮"));
+  const state = await second.connect(workspace);
+  assert.equal(child.requests.some((item) => item.method === "session/new"), true);
+  assert.equal(state.session_id, "session-local");
+  assert.deepEqual(state.messages, []);
+  assert.match(state.activity, /旧对话暂时无法恢复/);
 });
 
 test("resetting a workspace starts a clean session and leaves the old Codex thread untouched", async (t) => {

@@ -27,7 +27,8 @@ const {
   BRIDGE_SWEEP_INTERVAL_MS,
   bridgeStatusIsFresh,
   processIsAlive,
-  safeBridgeCommand
+  safeBridgeCommand,
+  stopSupervisedBridges
 } = require("./bridge-supervisor.cjs");
 const { calculateDockedBounds, calculateDraggedBounds, clamp, equalBounds, nearestDock } = require("./geometry.cjs");
 
@@ -49,6 +50,7 @@ const AVATAR_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "svg"];
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 const TRAY_ICON_PATH = path.join(__dirname, process.platform === "win32" ? "tray-icon.ico" : "tray-icon.png");
 const APP_DISPLAY_NAME = "五行 Harness 助手";
+const ADAPTER_RECONNECT_INTERVAL_MS = 5_000;
 
 app.setName(APP_DISPLAY_NAME);
 
@@ -72,6 +74,7 @@ let avatarCache = { key: "", value: null };
 let lastCompanionHeartbeat = 0;
 let lastBridgeSweep = 0;
 const supervisedBridges = new Map();
+const unavailableAdapters = new Map();
 const settingsExistedAtLaunch = fs.existsSync(SETTINGS_PATH);
 let companionSettings = readJson(SETTINGS_PATH, { dock: null, free_bounds: null, always_on_top: true });
 
@@ -338,9 +341,76 @@ function adapterTarget(session) {
   return session?.workspace ? { agent_id: session.agent_id, runtime_id: session.runtime?.id || "", workspace: session.workspace } : null;
 }
 
+function adapterConnectionKey(target) {
+  return target ? `${target.agent_id || "agent-local"}\u0000${target.runtime_id || "unknown"}\u0000${path.resolve(target.workspace || ".")}` : "";
+}
+
+function markAdapterUnavailable(target, error) {
+  if (!target?.workspace) return;
+  const key = adapterConnectionKey(target);
+  const previous = unavailableAdapters.get(key);
+  unavailableAdapters.set(adapterConnectionKey(target), {
+    target,
+    attemptedAt: Date.now(),
+    attemptedWhileOnline: previous?.attemptedWhileOnline || false,
+    sawOffline: previous?.sawOffline || false,
+    reason: String(error?.message || error || "agent-adapter-unavailable").slice(0, 600)
+  });
+  lastPayload = "";
+}
+
+function clearUnavailableAdapter(target) {
+  unavailableAdapters.delete(adapterConnectionKey(target));
+}
+
+function unavailableConversation(target) {
+  const unavailable = unavailableAdapters.get(adapterConnectionKey(target));
+  if (!unavailable) return null;
+  const adapter = agentAdapters?.descriptor(target);
+  return {
+    workspace: target.workspace,
+    status: "offline",
+    output: "",
+    activity: "当前 Agent 暂时不可访问；重新上线后会自动恢复连接。",
+    error: "",
+    session_id: null,
+    started_at: null,
+    completed_at: null,
+    messages: [],
+    ...(adapter ? { adapter_id: adapter.id, adapter_label: adapter.label } : {})
+  };
+}
+
+function reconnectUnavailableAdapters(sessions) {
+  if (!agentAdapters) return;
+  const now = Date.now();
+  for (const unavailable of unavailableAdapters.values()) {
+    const session = sessions.find((item) => item.agent_id === unavailable.target.agent_id
+      && (item.runtime?.id || "") === unavailable.target.runtime_id
+      && item.workspace === unavailable.target.workspace);
+    const online = session?.extensions?.connected === true && session.status === "active";
+    if (!online) {
+      unavailable.sawOffline = true;
+      unavailable.attemptedWhileOnline = false;
+      continue;
+    }
+    if ((unavailable.attemptedWhileOnline && !unavailable.sawOffline) || now - unavailable.attemptedAt < ADAPTER_RECONNECT_INTERVAL_MS) continue;
+    unavailable.attemptedAt = now;
+    unavailable.attemptedWhileOnline = true;
+    unavailable.sawOffline = false;
+    agentAdapters.connect(unavailable.target)
+      .then(() => { clearUnavailableAdapter(unavailable.target); lastPayload = ""; sync(); })
+      .catch((error) => { markAdapterUnavailable(unavailable.target, error); });
+  }
+}
+
 function focusedSession(sessions = activeSessions()) {
   const selected = companionSettings.focus_workspace;
-  return sessions.find((item) => item.agent_id === selected?.agent_id && item.workspace === selected?.workspace && (!selected?.runtime_id || item.runtime?.id === selected.runtime_id))
+  const selectedSession = sessions.find((item) => item.agent_id === selected?.agent_id && item.workspace === selected?.workspace && (!selected?.runtime_id || item.runtime?.id === selected.runtime_id));
+  return (selectedSession?.extensions?.connected ? selectedSession : null)
+    || sessions.find((item) => item.extensions?.connected && item.status === "active")
+    || sessions.find((item) => item.extensions?.connected)
+    || selectedSession
     || sessions.find((item) => item.status === "active")
     || sessions[0]
     || null;
@@ -353,7 +423,6 @@ function setFocusWorkspace(agentId, workspace, runtimeId = "") {
   writeSettings();
   lastPayload = "";
   sync();
-  agentAdapters?.connect(adapterTarget(session)).catch(() => { lastPayload = ""; sync(); });
   return { agent_id: agentId, runtime_id: session.runtime?.id || "", workspace };
 }
 
@@ -636,7 +705,8 @@ function currentPayload() {
       ...tier
     };
   });
-  return { dataHome: DATA_HOME, sessions, focusAgentId, focusRuntimeId, focusWorkspace, tracked, awards, claims, catalog, designs, score: automation.score, automation, avatar: readAvatar(), agentConversation: agentAdapters?.stateFor(adapterTarget(focusSession)) || null, diagnostic: latestDiagnostic ? {
+  const focusTarget = adapterTarget(focusSession);
+  return { dataHome: DATA_HOME, sessions, focusAgentId, focusRuntimeId, focusWorkspace, tracked, awards, claims, catalog, designs, score: automation.score, automation, avatar: readAvatar(), agentConversation: agentAdapters?.stateFor(focusTarget) || unavailableConversation(focusTarget), diagnostic: latestDiagnostic ? {
     request_id: latestDiagnostic.request_id,
     reason: latestDiagnostic.reason,
     status: latestDiagnostic.status,
@@ -1037,6 +1107,7 @@ function sync() {
   writeCompanionStatus("running");
   superviseAgentBridges();
   const payload = currentPayload();
+  reconnectUnavailableAdapters(payload.sessions);
   const notification = bubbleMessage(previousBubblePayload, payload);
   previousBubblePayload = payload;
   const serialized = JSON.stringify(payload);
@@ -1131,11 +1202,13 @@ async function showAgentSessionMenu() {
     ];
     Menu.buildFromTemplate(template).popup({ window });
   } catch (error) {
+    markAdapterUnavailable(adapterTarget(focusSession), error);
+    sync();
     await dialog.showMessageBox(window, {
-      type: "error",
-      title: "无法读取历史对话",
+      type: "info",
+      title: "Agent 暂未上线",
       message: "暂时无法读取当前仓库的 Agent 对话。",
-      detail: String(error?.message || error),
+      detail: "五行助手会在当前 Agent 重新上线后自动恢复连接，无需重启桌宠。",
       buttons: ["知道了"]
     });
   }
@@ -1240,8 +1313,6 @@ if (!hasSingleInstanceLock) {
       }
     });
     await agentConnectionServer.start();
-    const initialFocus = focusedSession();
-    if (initialFocus?.workspace) agentAdapters.connect(adapterTarget(initialFocus)).catch(() => { lastPayload = ""; sync(); });
     createWindow();
     createBubbleWindow();
     createTray();
@@ -1280,6 +1351,12 @@ if (!hasSingleInstanceLock) {
     sync();
   });
   app.on("second-instance", () => { if (window) { window.showInactive(); revealFromEdge(); showChat(); } });
-  app.on("before-quit", () => { quitting = true; agentAdapters?.stop(); agentConnectionServer?.stop(); writeCompanionStatus("stopped", true); });
+  app.on("before-quit", () => {
+    quitting = true;
+    stopSupervisedBridges(supervisedBridges);
+    agentAdapters?.stop();
+    agentConnectionServer?.stop();
+    writeCompanionStatus("stopped", true);
+  });
   app.on("window-all-closed", (event) => event.preventDefault());
 }

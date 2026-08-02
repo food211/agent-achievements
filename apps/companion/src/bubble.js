@@ -29,8 +29,9 @@ function renderState(payload) {
   workspace.textContent = `${repository}${payload.agentConversation?.adapter_label ? ` · ${payload.agentConversation.adapter_label}` : ""}`;
   const conversation = payload.agentConversation;
   const busy = ["connecting", "streaming"].includes(conversation?.status);
+  const unavailable = conversation?.status === "offline";
   activity.textContent = conversation?.error || conversation?.activity || (session ? "等待你的消息" : "等待 Code Agent 连接");
-  input.disabled = busy || !session?.workspace;
+  input.disabled = busy || unavailable || !session?.workspace;
   form.querySelector("button").disabled = input.disabled;
   const items = [...(conversation?.messages || [])];
   if (conversation?.status === "streaming" && conversation.output) items.push({ role: "assistant", text: conversation.output, live: true });
