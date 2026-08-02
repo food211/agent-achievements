@@ -1,6 +1,6 @@
 ---
 name: wuxing-harness
-description: 诊断 Code Agent 工作区的规则系统：一部分审查已有 Skills、AGENTS.md、CLAUDE.md、模板和提示词，带用户修改或退役已经漂移、用错场景或越界自动化的规则；另一部分询问用户真实的 AI 协作痛点，结合任务证据提炼共通情形并沉淀为新规则。用于“诊断当前仓库”“清理陈旧规则”“把反复问题写成规则”“AI 总在某件事上做不好”以及五行 Harness 审查。必须先调查和举证，一次只推进一个判断，不要把诊断变成问卷。
+description: 诊断和维护 Code Agent 工作区的规则系统：一部分审查已有 Skills、AGENTS.md、CLAUDE.md、模板和提示词，带用户修改或退役已经漂移、用错场景或越界自动化的规则；另一部分询问用户真实的 AI 协作痛点，结合任务证据提炼共通情形并沉淀为新规则；也负责安全更新已安装的五行 Harness Skill 和可选桌宠。用于“诊断当前仓库”“清理陈旧规则”“把反复问题写成规则”“AI 总在某件事上做不好”“更新五行 Harness”“升级 Skill”或“更新桌宠”。必须先调查和举证，一次只推进一个判断，不要把诊断变成问卷。
 ---
 
 # 五行 Harness
@@ -261,6 +261,69 @@ description: 诊断 Code Agent 工作区的规则系统：一部分审查已有 
 - 已有记录先读取并沿用，不让用户重复做决定。
 
 相似问题是否反复出现，应由数据库里的事实证明；不要为了少打断用户而盲目创造新规则。
+
+## 更新 Harness Skill 和可选桌宠
+
+用户说“更新五行 Harness”“升级 Skill”或“更新桌宠”时，先确认她要更新哪一项。更新是独立维护任务，不在诊断过程中自动触发，也不因为发现新版本就自行覆盖本地文件。
+
+### 更新 Harness Skill
+
+先确定当前 Skill 根目录、它的上一级 Skills 目录和当前工作区。读取已安装版本，检查是否有用户自行修改的内容。
+
+如果用户保留了 `harness-assistant` 源码仓库，并且工作区干净，使用：
+
+```bash
+git -C <harness-assistant-repository> fetch origin main
+git -C <harness-assistant-repository> pull --ff-only
+node <harness-assistant-repository>/scripts/install-agent-skills.mjs --target <skills-root> --workspace <workspace> --agent <stable-agent-id> --runtime <runtime-id>
+```
+
+没有本地源码仓库时，克隆到一个新的临时目录，再运行同一个安装器：
+
+```bash
+git clone --depth 1 https://github.com/food211/harness-assistant.git <new-temporary-directory>
+node <new-temporary-directory>/scripts/install-agent-skills.mjs --target <skills-root> --workspace <workspace> --agent <stable-agent-id> --runtime <runtime-id>
+```
+
+安装器报告 `skill-modified` 时，说明已安装版本和官方版本不同。先比较差异并交给用户判断；确认本地改动可以被替换后，才在原命令末尾增加 `--force`。不要用 `git reset --hard`、删除目录或未经确认的强制覆盖来完成更新。
+
+更新完成后：
+
+1. 重新读取安装目录中的 `SKILL.md`，确认内容来自新版本。
+2. 运行 Skill 格式校验；找不到校验器时，至少检查 YAML frontmatter 和引用文件都存在。
+3. 保留 `.wuxing-harness/harness.db`，不因更新清空用户的问题和决定。
+4. 当前宿主不能热重载 Skill 时，明确告诉用户新版本会从下一次会话生效；不要假装当前上下文已经替换。
+
+### 更新可选桌宠
+
+桌宠仍在开发中，只有用户已经安装或明确要求安装时才处理。它目前从仓库源码运行，没有独立发布版更新器。
+
+先定位桌宠实际运行的源码仓库。默认状态文件位于 `~/.agent-achievements/companion-status.json`，自定义了 `AGENT_ACHIEVEMENTS_HOME` 时使用对应目录。状态文件只提供 PID，必须再检查该进程的命令行确实指向目标仓库的 `apps/companion`；不要按 `electron` 或 `node` 进程名批量结束进程。
+
+确认源码仓库没有未提交改动后执行：
+
+```bash
+git -C <harness-assistant-repository> fetch origin main
+git -C <harness-assistant-repository> pull --ff-only
+npm --prefix <harness-assistant-repository> install
+npm --prefix <harness-assistant-repository> run build --workspace=@agent-achievements/companion
+```
+
+源码仓库有未提交改动时停止更新，列出相关文件并询问用户如何处理。不要暂存、丢弃或夹带提交这些改动。
+
+构建通过后，安全重启桌宠：先核对状态文件中的准确 PID 和进程命令行，只结束这个实例，再从更新后的仓库启动。Windows 使用：
+
+```powershell
+Start-Process -FilePath "node" -ArgumentList @("<harness-assistant-repository>\apps\companion\scripts\start.mjs") -WorkingDirectory "<harness-assistant-repository>" -WindowStyle Hidden
+```
+
+macOS 或 Linux 使用：
+
+```bash
+nohup node <harness-assistant-repository>/apps/companion/scripts/start.mjs >/dev/null 2>&1 &
+```
+
+重启后检查 `companion-status.json`：状态应为 `running`，`observed_at` 应刷新，PID 应指向新实例。用户数据保存在 `~/.agent-achievements` 或配置的 data home，更新和重启都不能删除该目录。
 
 ## 五行只做结果标注
 
