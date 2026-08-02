@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wuxing-harness.local/decision.schema.json",
+  "title": "Wuxing Harness human decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision", "disposition"],
+  "properties": {
+    "decision_id": { "type": "string", "minLength": 2, "maxLength": 128 },
+    "issue_id": { "type": "string", "minLength": 2, "maxLength": 128 },
+    "decision": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "rationale": { "type": "string", "maxLength": 4000 },
+    "disposition": { "enum": ["ask", "self_decide", "observe", "create_rule", "replace_rule", "retire_rule"] },
+    "rule_ref": { "type": "string", "maxLength": 1000 }
+  }
+}

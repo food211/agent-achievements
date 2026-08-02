@@ -11,12 +11,13 @@ description: Automatically audit accumulated workspace rules after installation 
 
 ## 安装后的自动入口
 
-成就系统 `bootstrap` 返回 `run_wuxing_diagnostic` 时，当前安装 Agent 直接执行一次只读诊断，不要求用户再说“开始”，也不要求用户先选择规则：
+成就系统 `bootstrap` 返回 `run_wuxing_diagnostic` 时，当前安装 Agent 启动或恢复一次分阶段诊断，不要求用户再说“开始”。完整遵循 [references/coaching-flow.md](references/coaching-flow.md)：
 
 1. 初始化当前工作区的 Harness 状态。
-2. 扫描实际生效的规则源，按下述证据门槛形成待判断项或继续观察项。
-3. 保存诊断结果；能安全验证的继续验证，涉及产品判断、高影响数据或自动化边界的内容只挂起这一项。
-4. 继续其他独立任务，不把等待人的判断变成整个 Agent 的阻塞点。
+2. 在后台只读盘点实际生效的规则源，为访谈准备事实；不要直接把扫描结果当作用户的判断。
+3. 调用 `coach-start` 或 `coach-status`，每轮只问返回的当前问题。回答不具体就留在原问题追实例；不得提前跳到技术实现。
+4. 依次完成“开发创作者 → 技术判据 → 边界”三段，再结合代码证据形成待判断项或继续观察项。
+5. 涉及产品判断、高影响数据或自动化边界的内容只挂起这一项；其他独立任务继续运行。
 
 首次五行诊断检查“当前规则是否健康”。它和成就系统的首次成果回顾是两个动作：不要用旧成就替代规则诊断，也不要把尚未修复的规则问题算作成果。
 
@@ -72,13 +73,19 @@ CLI 会把合格结果转换为 `agent-achievements/v1` 事件并交给成就系
 
 ```powershell
 node <skill-path>/scripts/harness-cli.mjs init --workspace <path>
+node <skill-path>/scripts/harness-cli.mjs coach-start --workspace <path>
+node <skill-path>/scripts/harness-cli.mjs coach-status --workspace <path>
+node <skill-path>/scripts/harness-cli.mjs coach-answer --workspace <path> --input <answer.json>
+node <skill-path>/scripts/harness-cli.mjs issue-log --workspace <path> --input <issue.json>
+node <skill-path>/scripts/harness-cli.mjs decision-log --workspace <path> --input <decision.json>
+node <skill-path>/scripts/harness-cli.mjs history --workspace <path> --limit 50
 node <skill-path>/scripts/harness-cli.mjs propose --input <finding.json>
 node <skill-path>/scripts/harness-cli.mjs list
 node <skill-path>/scripts/harness-cli.mjs decide --finding <id> --decision approve|reject --note <text>
 node <skill-path>/scripts/harness-cli.mjs applied --finding <id> --input <application.json>
 ```
 
-记录默认保存在当前工作区 `.wuxing-harness/state.json`。脚本只保存判断和证据，不自行修改规则文件。成就申请始终晚于人的批准和实际验证，不能反过来驱动审查结论。
+`answer.json` 包含当前 `step_id`、用户原话 `answer`，以及 `quality: concrete|needs_followup`。访谈指针保存在 `.wuxing-harness/state.json`；逐步回答、Agent 遇到的问题和用户决策保存在 `.wuxing-harness/harness.db`。问题与决策的字段和记录时机见 [references/coaching-flow.md](references/coaching-flow.md)。脚本不自行修改规则文件。成就申请始终晚于人的批准和实际验证，不能反过来驱动审查结论。
 
 ## 给人的输出
 

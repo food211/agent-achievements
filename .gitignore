@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .agent-achievements/
+.wuxing-harness/
 *.log
 *.tsbuildinfo
 .DS_Store

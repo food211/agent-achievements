@@ -5,7 +5,7 @@ description: Automatically connect a Code Agent to the Wuxing companion and Agen
 
 # Use Agent Achievements
 
-This Skill follows the open Agent Skills folder format. Do not assume Codex, Claude Code, Cursor, OpenCode, or any other specific host. Resolve `<skill-path>` from the installed `SKILL.md` location and use the bundled scripts with Node.js 20 or newer.
+This Skill follows the open Agent Skills folder format. Do not assume Codex, Claude Code, Cursor, OpenCode, or any other specific host. Resolve `<skill-path>` from the installed `SKILL.md` location and use the bundled scripts with Node.js 22 or newer.
 
 Treat achievements as soft preferences. Keep this priority order:
 
@@ -30,7 +30,7 @@ Consume every returned `agent_next_actions` item without asking the user to crea
 
 - `ensure_companion_running`: use the action's probe and launch command to start the desktop companion once when this repository or an installed executable is available. Start it detached so the Agent task can continue. Do not treat the GUI as a protocol dependency and do not claim it was launched when the host cannot run desktop applications.
 - `ensure_agent_bridge`: check the action's file-freshness probe and confirm the recorded PID is still alive. If either check fails, launch the exact `bridge_command` detached with `shell: false`. The bridge must remain alive after the invoking terminal returns; its per-Agent lock prevents duplicate instances, and it reconnects automatically when the companion starts, restarts, or rotates its endpoint and token. Do not copy the token into prompts, logs, or command arguments.
-- `run_wuxing_diagnostic`: load the sibling `wuxing-harness` Skill and perform its initial read-only rule diagnosis. Store evidence-backed findings; do not silently modify rules that require human judgment.
+- `run_wuxing_diagnostic`: load the sibling `wuxing-harness` Skill and start or resume its saved, step-by-step rule diagnosis. Ask only its current question, require concrete examples before advancing, and finish the creator, technical, and boundary phases in order. Store evidence-backed findings; do not silently modify rules that require human judgment.
 - `diagnose_past_achievements`: inspect completed work, accepted rules, tests, commits, and reusable workflow improvements, then submit one retrospective report as described below.
 
 After an action succeeds, close it so it is not assigned again:

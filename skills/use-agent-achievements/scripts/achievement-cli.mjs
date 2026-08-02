@@ -657,7 +657,7 @@ async function bootstrap() {
         status: "pending",
         reason: "first_install",
         workspace,
-        instructions: "扫描当前工作区的规则源与已安装 Skills，对照代码、测试、产物和运行证据执行五行审查；证据不足时不下结论，需要人判断的修改只进入待判队列。完成后调用 action-complete 关闭本动作。",
+        instructions: "加载 wuxing-harness Skill，启动或恢复已保存的三段式规则诊断。每轮只问当前问题，先追到创作者的真实实例，再按顺序讨论入队判据、续跑、沉淀、推翻、指标与边界；不要直接用一次扫描代替访谈。诊断形成最小闭环、具体入队判据和不做清单后，再调用 action-complete。",
         guardrails: [...actionGuardrails, "不得擅自修改高优先级规则"],
         created_at: now
       });

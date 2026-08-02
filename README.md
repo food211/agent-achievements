@@ -86,7 +86,7 @@ Agent 在完成有意义的任务后自动报告结果；达到条件时，系�
 
 - [打开五行 Harness 演示](https://wuxing-creation-harness.misakiff14.chatgpt.site)
 
-本地运行需要 Node.js 20 或更高版本：
+本地运行需要 Node.js 22 或更高版本（五行 Harness 使用 Node 内置 SQLite 保存问题与人的决策）：
 
 ```powershell
 npm install
