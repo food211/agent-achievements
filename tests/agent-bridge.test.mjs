@@ -124,6 +124,15 @@ test("the bridge authenticates, forwards real activity, and atomically stores co
           type: "action",
           schema_version: VERSION,
           action: { action_id: "record-task", action: "record_completed_task" }
+        })}\n${JSON.stringify({
+          type: "prompt_request",
+          schema_version: VERSION,
+          request_id: "prompt-test-bridge",
+          agent_id: "agent-a",
+          workspace: process.cwd(),
+          intent: "run_wuxing_diagnostic",
+          text: "开始五行诊断",
+          created_at: new Date().toISOString()
         })}\n`);
       }
     });
@@ -182,6 +191,7 @@ test("the bridge authenticates, forwards real activity, and atomically stores co
     "--data-home", home,
     "--endpoint", `tcp://127.0.0.1:${address.port}`,
     "--token", token,
+    "--prompt-mode", "codex_stop_hook",
     "--once",
     "--once-timeout-ms", "3000"
   ]);
@@ -195,6 +205,7 @@ test("the bridge authenticates, forwards real activity, and atomically stores co
   assert.equal(received.some((message) => message.type === "status" && message.status === "active"), true);
   assert.equal(received.some((message) => message.type === "task" && message.current_task?.id === "task-1"), true);
   assert.equal(received.some((message) => ["event", "claim", "award"].includes(message.type)), false);
+  assert.equal(received.some((message) => message.type === "prompt_ack" && message.request_id === "prompt-test-bridge" && message.status === "accepted"), true);
 
   const inboxText = await readFile(path.join(home, "agent-inbox.json"), "utf8");
   const inbox = JSON.parse(inboxText);
@@ -202,6 +213,8 @@ test("the bridge authenticates, forwards real activity, and atomically stores co
   assert.equal(agentInbox.context.motivation, "Keep the user's outcome first.");
   assert.deepEqual(agentInbox.actions.map((entry) => entry.payload.action_id).sort(), ["diagnose-rules", "record-task"]);
   assert.equal(inboxText.includes(token), false, "connection credentials must never enter the Agent inbox");
+  const prompts = JSON.parse(await readFile(path.join(home, "prompt-requests.json"), "utf8"));
+  assert.equal(prompts.requests[0].text, "开始五行诊断");
 
   const status = JSON.parse(await readFile(path.join(home, "bridges", `${bridgeHash("agent-a")}.json`), "utf8"));
   assert.equal(status.status, "stopped");

@@ -44,7 +44,11 @@ function validIdentity(message) {
     && message.runtime.id.length <= 80
     && typeof message.workspace === "string"
     && message.workspace.trim()
-    && message.workspace.length <= 1000;
+    && message.workspace.length <= 1000
+    && (message.capabilities === undefined || (
+      message.capabilities && typeof message.capabilities === "object"
+      && [undefined, "codex_stop_hook", "host_native"].includes(message.capabilities.prompt_injection)
+    ));
 }
 
 function createAgentConnectionServer(options) {
@@ -53,6 +57,7 @@ function createAgentConnectionServer(options) {
   const token = randomBytes(32).toString("hex");
   const now = options.now || (() => Date.now());
   const connections = new Map();
+  const promptWaiters = new Map();
   let server = null;
   let sweepTimer = null;
   let endpoint = null;
@@ -82,7 +87,11 @@ function createAgentConnectionServer(options) {
       observed_at: observedAt,
       expires_at: new Date(connection.lastSeen + CONNECTION_TTL_MS).toISOString(),
       ...(connection.currentTask ? { current_task: connection.currentTask } : {}),
-      extensions: { transport: "local_tcp", connected: true }
+      extensions: {
+        transport: "local_tcp",
+        connected: true,
+        prompt_injection: connection.promptInjection || "unsupported"
+      }
     };
   }
 
@@ -108,6 +117,7 @@ function createAgentConnectionServer(options) {
       sessionId: message.session_id.trim(),
       runtimeId: message.runtime.id.trim(),
       workspace: path.resolve(message.workspace.trim()),
+      promptInjection: message.capabilities?.prompt_injection || null,
       status: message.status === "active" ? "active" : "idle",
       currentTask: normalizedTask(message.current_task),
       lastSeen: now(),
@@ -142,7 +152,14 @@ function createAgentConnectionServer(options) {
       connection.currentTask = normalizedTask(message.current_task);
       connection.status = connection.currentTask ? "active" : "idle";
     } else if (message.type === "context_request") {
-      send(connection.socket, { type: "context", schema_version: VERSION, context: contextFor(connection.agentId) });
+      send(connection.socket, { type: "context", schema_version: VERSION, context: contextFor(connection.agentId, connection.workspace) });
+    } else if (message.type === "prompt_ack") {
+      const waiter = promptWaiters.get(message.request_id);
+      if (waiter && waiter.connectionKey === connection.key && new Set(["accepted", "delivered", "failed", "unsupported"]).has(message.status)) {
+        clearTimeout(waiter.timer);
+        promptWaiters.delete(message.request_id);
+        waiter.resolve({ request_id: message.request_id, status: message.status, detail: String(message.detail || "").slice(0, 600) });
+      }
     }
     notifyChanged();
   }
@@ -199,6 +216,33 @@ function createAgentConnectionServer(options) {
     }
   }
 
+  function requestPrompt(agentId, workspace, input) {
+    const targetWorkspace = path.resolve(workspace);
+    const eligible = [...connections.values()].filter((connection) => connection.agentId === agentId && connection.promptInjection);
+    const connection = eligible.find((item) => item.workspace === targetWorkspace) || eligible[0];
+    if (!connection) return Promise.reject(new Error("prompt-injection-unsupported"));
+    const text = String(input?.text || "").trim();
+    if (!text || text.length > 4000) return Promise.reject(new Error("prompt-invalid"));
+    const requestId = `prompt-${randomBytes(12).toString("hex")}`;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        promptWaiters.delete(requestId);
+        reject(new Error("prompt-ack-timeout"));
+      }, 2500);
+      promptWaiters.set(requestId, { connectionKey: connection.key, resolve, reject, timer });
+      send(connection.socket, {
+        type: "prompt_request",
+        schema_version: VERSION,
+        request_id: requestId,
+        agent_id: agentId,
+        workspace: targetWorkspace,
+        intent: input.intent,
+        text,
+        created_at: new Date(now()).toISOString()
+      });
+    });
+  }
+
   async function start() {
     if (server) return endpoint;
     server = net.createServer(handleSocket);
@@ -230,6 +274,11 @@ function createAgentConnectionServer(options) {
     sweepTimer = null;
     for (const connection of connections.values()) connection.socket.destroy();
     connections.clear();
+    for (const waiter of promptWaiters.values()) {
+      clearTimeout(waiter.timer);
+      waiter.reject(new Error("prompt-connection-closed"));
+    }
+    promptWaiters.clear();
     if (server) server.close();
     server = null;
     try {
@@ -243,6 +292,7 @@ function createAgentConnectionServer(options) {
     stop,
     sessions: () => [...connections.values()].map(publicSession),
     refreshContexts,
+    requestPrompt,
     endpointPath
   };
 }

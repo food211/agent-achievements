@@ -198,6 +198,39 @@ export async function updateAgentInbox(dataHome, identity, message) {
   }
 }
 
+export async function storePromptRequest(dataHome, identity, message) {
+  if (message?.type !== "prompt_request" || message.schema_version !== VERSION) return false;
+  const requestId = normalizedString(message.request_id);
+  const agentId = normalizedString(message.agent_id);
+  const workspace = normalizedString(message.workspace);
+  const text = normalizedString(message.text);
+  if (!/^prompt-[a-z0-9-]{4,80}$/.test(requestId) || agentId !== identity.agentId || !workspace || !text || text.length > 4000) return false;
+  const file = path.join(dataHome, "prompt-requests.json");
+  const release = await acquireInboxLock(dataHome);
+  try {
+    const document = await readJson(file, { schema_version: VERSION, requests: [] });
+    document.requests = Array.isArray(document.requests) ? document.requests : [];
+    if (!document.requests.some((item) => item.request_id === requestId)) {
+      document.requests.push({
+        schema_version: VERSION,
+        request_id: requestId,
+        agent_id: agentId,
+        workspace: path.resolve(workspace),
+        intent: message.intent === "run_wuxing_diagnostic" ? message.intent : "run_wuxing_diagnostic",
+        text,
+        status: "accepted",
+        created_at: message.created_at || isoNow(),
+        accepted_at: isoNow()
+      });
+      document.requests = document.requests.slice(-100);
+      await atomicWriteJson(file, document);
+    }
+    return true;
+  } finally {
+    await release();
+  }
+}
+
 function endpointText(host, port) {
   return `tcp://${host.includes(":") ? `[${host}]` : host}:${port}`;
 }
@@ -367,6 +400,7 @@ export class AgentBridge {
     this.reconnectMs = Math.max(25, Number(options.reconnectMs) || DEFAULT_RECONNECT_MS);
     this.connectTimeoutMs = Math.max(250, Number(options.connectTimeoutMs) || 10_000);
     this.onceTimeoutMs = Math.max(500, Number(options.onceTimeoutMs) || 10_000);
+    this.promptMode = options.promptMode || null;
     this.paths = bridgePaths(this.dataHome, this.identity.agentId);
     this.stopping = false;
     this.socket = null;
@@ -542,8 +576,19 @@ export class AgentBridge {
         if (message.type === "ping") {
           writeLine(socket, { type: "pong", schema_version: VERSION, sent_at: isoNow() });
         }
+        if (message.type === "prompt_request") {
+          const accepted = this.promptMode ? await storePromptRequest(this.dataHome, identity, message) : false;
+          writeLine(socket, {
+            type: "prompt_ack",
+            schema_version: VERSION,
+            request_id: message.request_id,
+            status: accepted ? "accepted" : "unsupported",
+            detail: accepted ? "Prompt queued for the host adapter." : "This bridge has no prompt injection adapter.",
+            observed_at: isoNow()
+          });
+        }
         await updateAgentInbox(this.dataHome, identity, message);
-        if (this.once && message.type === "welcome") socket.end();
+        if (this.once && message.type === "welcome") setTimeout(() => socket.end(), 25);
         if (message.type === "error" && ["unauthorized", "invalid_token"].includes(message.code)) {
           connectionError = new Error("The companion rejected the bridge credentials.");
           socket.end();
@@ -581,6 +626,7 @@ export class AgentBridge {
           session_id: identity.sessionId,
           runtime: { id: identity.runtimeId },
           workspace: initialActivity.workspace || identity.workspace,
+          ...(this.promptMode ? { capabilities: { prompt_injection: this.promptMode } } : {}),
           ...(initialActivity.currentTask ? { current_task: initialActivity.currentTask } : {})
         };
         writeLine(socket, hello);
@@ -646,7 +692,8 @@ function usage() {
     "  --once                              Exit after the authenticated welcome.",
     "  --reconnect-ms <milliseconds>        Initial reconnect delay.",
     "  --connect-timeout-ms <milliseconds>  Per-attempt connection timeout.",
-    "  --once-timeout-ms <milliseconds>     Welcome timeout in --once mode."
+    "  --once-timeout-ms <milliseconds>     Welcome timeout in --once mode.",
+    "  --prompt-mode <adapter-mode>          Enable prompt injection through a host adapter."
   ].join("\n");
 }
 
@@ -667,7 +714,8 @@ async function main() {
     once: options.once,
     reconnectMs: options.reconnectMs,
     connectTimeoutMs: options.connectTimeoutMs,
-    onceTimeoutMs: options.onceTimeoutMs
+    onceTimeoutMs: options.onceTimeoutMs,
+    promptMode: options.promptMode
   });
   const stop = () => { void bridge.stop(); };
   process.once("SIGINT", stop);

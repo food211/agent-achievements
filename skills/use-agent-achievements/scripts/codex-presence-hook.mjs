@@ -30,6 +30,7 @@ const AGENT_ID = identityOption("agent", "codex-local", 128);
 const RUNTIME_ID = identityOption("runtime", "codex", 80);
 const dataHome = path.resolve(hookOption("data-home", process.env.AGENT_ACHIEVEMENTS_HOME || path.join(os.homedir(), ".agent-achievements")));
 const presencePath = path.join(dataHome, "presence.json");
+const promptRequestsPath = path.join(dataHome, "prompt-requests.json");
 const statePath = path.join(dataHome, "state.json");
 const lockPath = path.join(dataHome, ".achievement-cli.lock");
 const companionStatusPath = path.join(dataHome, "companion-status.json");
@@ -71,11 +72,11 @@ function writePresence(document) {
   renameSync(temporary, presencePath);
 }
 
-function updatePresence(input) {
+function updatePresence(input, continued = false) {
   const sessionId = String(input.session_id || "").trim();
   if (!sessionId) return;
   const event = input.hook_event_name;
-  const status = event === "Stop" ? "idle" : event === "SessionEnd" ? "stopped" : "active";
+  const status = event === "Stop" && !continued ? "idle" : event === "SessionEnd" ? "stopped" : "active";
   const now = new Date();
   const expiresAt = new Date(now.getTime() + (status === "active" ? 60 : 30) * 60 * 1000);
   const document = readJson(presencePath, { schema_version: VERSION, sessions: [] });
@@ -101,6 +102,24 @@ function updatePresence(input) {
     });
   }
   writePresence({ schema_version: VERSION, sessions });
+}
+
+function claimPromptRequest(input) {
+  if (input.hook_event_name !== "Stop" || input.stop_hook_active) return null;
+  const workspace = path.resolve(String(input.cwd || process.cwd()));
+  const document = readJson(promptRequestsPath, { schema_version: VERSION, requests: [] });
+  const request = (document.requests || []).find((item) =>
+    item.status === "accepted"
+    && item.agent_id === AGENT_ID
+    && path.resolve(String(item.workspace || "")) === workspace
+  );
+  if (!request) return null;
+  request.status = "delivered";
+  request.delivered_at = new Date().toISOString();
+  const temporary = `${promptRequestsPath}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(temporary, `${JSON.stringify(document, null, 2)}\n`, "utf8");
+  renameSync(temporary, promptRequestsPath);
+  return String(request.text || "").trim().slice(0, 4000) || null;
 }
 
 function processIsAlive(pid) {
@@ -217,7 +236,7 @@ function safeBridgeCommand(definition) {
   if (optionValue(args, "--agent") !== AGENT_ID || optionValue(args, "--runtime") !== RUNTIME_ID || !optionValue(args, "--session")) return null;
   const commandDataHome = optionValue(args, "--data-home");
   if (commandDataHome && (!path.isAbsolute(commandDataHome) || !samePath(commandDataHome, dataHome))) return null;
-  const allowedOptions = new Set(["--agent", "--runtime", "--session", "--data-home", "--reconnect-ms", "--connect-timeout-ms"]);
+  const allowedOptions = new Set(["--agent", "--runtime", "--session", "--data-home", "--reconnect-ms", "--connect-timeout-ms", "--prompt-mode"]);
   const seenOptions = new Set();
   for (let index = 1; index < args.length; index += 2) {
     if (!allowedOptions.has(args[index]) || seenOptions.has(args[index]) || args[index + 1] === undefined) return null;
@@ -274,8 +293,12 @@ function ensureAgentBridge(input) {
 
 const input = readInput();
 const locked = acquireStateLock();
+let injectedPrompt = null;
 try {
-  if (locked) updatePresence(input);
+  if (locked) {
+    injectedPrompt = claimPromptRequest(input);
+    updatePresence(input, Boolean(injectedPrompt));
+  }
 } catch {
   // Presence is advisory and must never interrupt the Agent's primary task.
 } finally {
@@ -288,4 +311,8 @@ try {
   ensureAgentBridge(input);
 } catch {
   // Runtime supervision is best-effort and must never fail a Codex lifecycle hook.
+}
+
+if (injectedPrompt) {
+  process.stdout.write(`${JSON.stringify({ decision: "block", reason: injectedPrompt })}\n`);
 }

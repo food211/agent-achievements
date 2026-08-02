@@ -17,13 +17,14 @@
     <section class="panel" id="panel" aria-hidden="true">
       <div class="panel-drag-cap drag" title="按住拖动窗口" aria-hidden="true"></div>
       <header class="drag">
-        <div><small>五行 Harness 助手</small><h1 id="panelAgent">Agent 正在工作</h1></div>
+        <div class="workspace-heading"><small>五行 Harness 助手</small><select id="workspaceSelector" aria-label="切换工作仓库"><option>Agent 正在工作</option></select></div>
         <div class="header-actions no-drag"><button id="companionTheme" aria-label="切换到浅色主题">浅色</button><button class="close" id="close" aria-label="收起">×</button></div>
       </header>
       <nav class="primary-actions no-drag" aria-label="主要功能">
         <button class="primary-action wuxing-action" id="diagnoseRepository"><span>克</span>诊断当前仓库</button>
         <button class="primary-action achievement-action" id="openForge"><span>✦</span>编辑成就</button>
       </nav>
+      <p class="diagnosis-request-status no-drag" id="diagnosisRequestStatus" role="status"></p>
       <div class="achievement-head">
         <div><small>ACHIEVEMENT COLLECTION</small><b>成就图鉴</b><span><i id="collectionCount">0 项成就</i> · <i id="totalScore">0 积分</i></span></div>
       </div>

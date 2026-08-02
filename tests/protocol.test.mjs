@@ -24,7 +24,9 @@ const schemaFiles = [
   "packages/protocol/schemas/achievement-design-proposal.schema.json",
   "packages/protocol/schemas/achievement-diagnostic-request.schema.json",
   "packages/protocol/schemas/achievement-diagnostic-report.schema.json",
-  "packages/protocol/schemas/award.schema.json"
+  "packages/protocol/schemas/award.schema.json",
+  "packages/protocol/schemas/prompt-request.schema.json",
+  "packages/protocol/schemas/prompt-ack.schema.json"
 ];
 
 async function validator(schemaFile) {

@@ -68,11 +68,19 @@ test("the local Agent connection authenticates, exchanges context, and removes d
   const client = connect(endpoint);
   await once(client, "connect");
   const nextLine = lines(client);
-  client.write(`${JSON.stringify(hello(endpoint))}\n`);
+  client.write(`${JSON.stringify(hello(endpoint, { capabilities: { prompt_injection: "host_native" } }))}\n`);
   const welcome = await nextLine();
   assert.equal(welcome.type, "welcome");
   assert.deepEqual(welcome.context, { version: 1 });
   assert.equal(server.sessions()[0].status, "idle");
+  assert.equal(server.sessions()[0].extensions.prompt_injection, "host_native");
+
+  const promptDelivery = server.requestPrompt("agent-a", process.cwd(), { intent: "run_wuxing_diagnostic", text: "开始五行诊断" });
+  const prompt = await nextLine();
+  assert.equal(prompt.type, "prompt_request");
+  assert.equal(prompt.workspace, process.cwd());
+  client.write(`${JSON.stringify({ type: "prompt_ack", schema_version: "agent-achievements/v1", request_id: prompt.request_id, status: "accepted", observed_at: new Date().toISOString() })}\n`);
+  assert.equal((await promptDelivery).status, "accepted");
 
   client.write(`${JSON.stringify({ type: "ping", schema_version: "agent-achievements/v1" })}\n`);
   assert.equal((await nextLine()).type, "pong");

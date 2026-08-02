@@ -51,6 +51,8 @@ Treat `connection.json` as a local discovery file owned by the companion. The br
 
 A connected bridge means only that the communication path is alive. Continue sending normalized presence for actual `active`, `idle`, and `stopped` task state. Neither a connection nor a heartbeat is achievement evidence.
 
+When the bridge receives a `prompt_request`, let the installed host adapter deliver it as a new user-equivalent prompt only to the request's exact `agent_id` and `workspace`. Return `accepted` only after durable queuing and `delivered` only after the host has inserted it into the Agent session. Never claim prompt injection when the host lacks that capability. The Codex adapter uses its trusted `Stop` continuation hook and does not connect to another app-server.
+
 At every task start, announce the current agent session so a companion or third-party interface can distinguish real activity from an idle long connection:
 
 ```powershell

@@ -22,7 +22,7 @@ const challengeBoundaries = document.getElementById("challengeBoundaries");
 const operatingPriority = document.getElementById("operatingPriority");
 const completedTasks = document.getElementById("completedTasks");
 const claimMessage = document.getElementById("claimMessage");
-const panelAgent = document.getElementById("panelAgent");
+const workspaceSelector = document.getElementById("workspaceSelector");
 const customAvatar = document.getElementById("customAvatar");
 const defaultAvatar = document.getElementById("defaultAvatar");
 const avatarHint = document.getElementById("avatarHint");
@@ -32,6 +32,7 @@ const autostart = document.getElementById("autostart");
 const alwaysOnTop = document.getElementById("alwaysOnTop");
 const companionTheme = document.getElementById("companionTheme");
 const diagnoseRepository = document.getElementById("diagnoseRepository");
+const diagnosisRequestStatus = document.getElementById("diagnosisRequestStatus");
 const openForge = document.getElementById("openForge");
 const closeForge = document.getElementById("closeForge");
 const forge = document.getElementById("forge");
@@ -66,6 +67,7 @@ let latestDesigns = [];
 let editingAchievementId = null;
 let catalogOrigin = "system_suggested";
 let latestDiagnostic = null;
+let latestSessions = [];
 
 function applyCompanionTheme(theme) {
   document.body.classList.toggle("theme-light", theme === "light");
@@ -149,12 +151,21 @@ function renderAutopilot(automation) {
 }
 
 function render(payload) {
-  const session = payload.sessions.find((item) => item.status === "active") || payload.sessions[0];
+  latestSessions = payload.sessions || [];
+  const session = latestSessions.find((item) => item.agent_id === payload.focusAgentId && item.workspace === payload.focusWorkspace)
+    || latestSessions.find((item) => item.status === "active")
+    || latestSessions[0];
   const isActive = session?.status === "active";
   const isIdle = session?.status === "idle";
   const workspaceName = session?.workspace ? session.workspace.replace(/[\\/]+$/, "").split(/[\\/]/).pop() : "";
-  const displayName = session ? `${session.agent_id} · ${workspaceName || session.runtime.id}` : "Agent 休息中";
-  panelAgent.textContent = displayName;
+  workspaceSelector.innerHTML = latestSessions.length
+    ? latestSessions.map((item, index) => {
+      const name = item.workspace ? item.workspace.replace(/[\\/]+$/, "").split(/[\\/]/).pop() : item.runtime.id;
+      const selected = item.agent_id === session?.agent_id && item.workspace === session?.workspace ? " selected" : "";
+      return `<option value="${index}"${selected}>${escapeHtml(name)} · ${escapeHtml(item.agent_id)}</option>`;
+    }).join("")
+    : "<option>Agent 休息中</option>";
+  workspaceSelector.disabled = latestSessions.length < 2;
   pet.classList.toggle("online", isActive);
   pet.classList.toggle("idle", isIdle);
   const statusText = isActive ? "Agent 正在工作" : isIdle ? "Agent 正在等待" : "Agent 离线";
@@ -289,20 +300,39 @@ alwaysOnTop.addEventListener("change", () => window.agentCompanion.setAlwaysOnTo
 window.agentCompanion.getAlwaysOnTop().then((enabled) => { alwaysOnTop.checked = enabled; });
 window.agentCompanion.onAlwaysOnTop((enabled) => { alwaysOnTop.checked = enabled; });
 diagnoseRepository.addEventListener("click", async () => {
-  trackingMessage.textContent = "正在诊断当前仓库…";
+  diagnoseRepository.disabled = true;
+  diagnosisRequestStatus.textContent = "正在把诊断提示词发送给当前 Agent…";
   try {
     const result = await window.agentCompanion.requestWuxingDiagnostic();
     const repository = result.workspace.replace(/[\\/]+$/, "").split(/[\\/]/).pop();
-    trackingMessage.textContent = result.created
-      ? `已交给当前 Agent：${repository}。诊断会按步骤逐个提问。`
-      : `${repository} 已有一轮诊断待继续。`;
+    diagnosisRequestStatus.textContent = result.delivery?.status === "delivered"
+      ? `已在 ${repository} 开始诊断。`
+      : result.target_session_status === "active"
+        ? `提示词已送达 ${repository}，Agent 会在当前工作结束后自动开始。`
+        : `提示词已排进 ${repository}，切回该仓库的 Agent 会话后自动开始。`;
   } catch (error) {
     const message = String(error?.message || "");
-    trackingMessage.textContent = message.includes("agent-not-connected")
+    diagnosisRequestStatus.textContent = message.includes("agent-not-connected")
       ? "没有连接中的 Code Agent，暂时无法确定当前仓库。"
       : message.includes("workspace-not-detected")
         ? "当前 Agent 尚未上报仓库路径，请重新打开一次 Agent 会话。"
+        : message.includes("prompt-injection-unsupported")
+          ? "这个 Agent 的适配器还不支持提示词注入。"
         : `启动失败：${message || "请重试"}`;
+  } finally {
+    diagnoseRepository.disabled = false;
+  }
+});
+
+workspaceSelector.addEventListener("change", async () => {
+  const session = latestSessions[Number(workspaceSelector.value)];
+  if (!session) return;
+  diagnosisRequestStatus.textContent = `正在切换到 ${session.workspace.replace(/[\\/]+$/, "").split(/[\\/]/).pop()}…`;
+  try {
+    await window.agentCompanion.setFocusWorkspace(session.agent_id, session.workspace);
+    diagnosisRequestStatus.textContent = "";
+  } catch (error) {
+    diagnosisRequestStatus.textContent = `切换失败：${error?.message || "请重试"}`;
   }
 });
 function renderEditorList() {

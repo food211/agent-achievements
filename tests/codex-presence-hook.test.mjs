@@ -27,6 +27,7 @@ function runHook(home, hookEventName, overrides = {}, hookArguments = [], enviro
     env: { ...process.env, AGENT_ACHIEVEMENTS_HOME: environmentHome }
   });
   assert.equal(result.status, 0, result.stderr);
+  return result;
 }
 
 async function readPresence(home) {
@@ -89,6 +90,30 @@ test("Codex lifecycle hooks drive active, idle, and stopped presence", async () 
   runHook(home, "SessionEnd");
   const stopped = await readPresence(home);
   assert.deepEqual(stopped.sessions, []);
+});
+
+test("a queued companion prompt becomes a Codex Stop continuation for the matching repository", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "agent-achievements-prompt-hook-"));
+  await seedFreshBridgeStatus(home);
+  await writeFile(path.join(home, "prompt-requests.json"), `${JSON.stringify({
+    schema_version: VERSION,
+    requests: [{
+      schema_version: VERSION,
+      request_id: "prompt-hook-test",
+      agent_id: agentId,
+      workspace: process.cwd(),
+      intent: "run_wuxing_diagnostic",
+      text: "请开始当前仓库的五行诊断。",
+      status: "accepted",
+      created_at: new Date().toISOString()
+    }]
+  })}\n`, "utf8");
+
+  const result = runHook(home, "Stop");
+  assert.deepEqual(JSON.parse(result.stdout), { decision: "block", reason: "请开始当前仓库的五行诊断。" });
+  const requests = JSON.parse(await readFile(path.join(home, "prompt-requests.json"), "utf8"));
+  assert.equal(requests.requests[0].status, "delivered");
+  assert.equal((await readPresence(home)).sessions[0].status, "active");
 });
 
 test("the Codex hook shares the CLI lock without deleting a live owner", async () => {

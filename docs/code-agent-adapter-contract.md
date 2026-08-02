@@ -25,6 +25,7 @@
    - `lifecycle-hook`：宿主提供受信任的会话生命周期 Hook；
    - `post-task-event`：宿主能在任务完成后提供规范化事件；
    - `background-wake`：宿主明确支持在没有新用户消息时唤醒 Agent。
+   - `prompt-injection`：宿主适配器可以把长连接收到的 `prompt_request` 作为新的用户提示词送入指定工作区会话，并返回投递回执。
 3. 把两份 Skill 安装为相邻目录。原生支持 Agent Skills 时优先使用跨客户端目录 `~/.agents/skills`，否则使用宿主能读取的目录，并在宿主原生规则中建立一个最小桥接：每轮加载两份 `SKILL.md`，执行其中的任务边界循环。宿主桥接留在用户自己的 Agent 配置中，不写回通用 Skill。
 4. 从仓库根目录运行安装器。当前 Agent 应自己填写参数，不让用户替它判断：
 
@@ -68,6 +69,17 @@
 
 长连接只证明通信通道可用。真实工作状态仍由 `presence` 的 `active`、`idle`、`stopped` 表示；socket 心跳、在线时长、启动 bridge 和启动桌面助手都不能成为成就证据。
 
+### 提示词注入
+
+助手可以通过已认证长连接发送 `prompt_request`。请求必须包含目标 `agent_id`、绝对 `workspace`、受限 `intent` 和不超过 4000 字的提示词。Bridge 只有在安装时绑定了真实宿主适配器时才能声明 `capabilities.prompt_injection`，并必须返回 `prompt_ack`：
+
+- `accepted`：已可靠写入宿主队列；
+- `delivered`：已进入目标 Agent 会话；
+- `failed`：适配器尝试后失败；
+- `unsupported`：当前连接不能注入提示词。
+
+不能把写入普通文件伪装成 `delivered`。Codex 适配器使用受信任的 `Stop` Hook：Bridge 先按仓库保存请求，当前回合结束时 Hook 用 continuation prompt 把它作为新的用户提示词送入同一仓库会话，不连接或复用其他产品的 app-server。没有实时注入能力的宿主保留请求，等宿主下一次安全任务边界消费。
+
 已有安装被修改时，安装器会停止。只有安装请求明确包含替换现有版本的授权，或当前 Agent确认这些只是旧版安装文件时，才使用 `--force`。不要覆盖用户自己改过的 Skill。
 
 ## 每轮自动循环
@@ -106,6 +118,7 @@ node <skill-path>/scripts/achievement-cli.mjs claim --input <claim.json>
 | 只有 Agent Skills 或原生规则 | 新会话第一轮恢复 bridge，每个 Agent 轮次按 Skill 自动执行完整循环 | 第一条用户消息前无法执行代码 |
 | 没有原生 Agent Skills | 当前安装 Agent 建立最小宿主规则桥接，仍调用同一 CLI | 不能假装 Skill 已被原生发现 |
 | 没有 `background-wake` | 待办动作持久化，下一轮自动续做 | 不能主动唤醒 Agent，也不能承诺实时处理 |
+| 有 `prompt-injection` | 助手按钮可向选中的仓库会话发送规范化提示词，并等待 `prompt_ack` | 只允许投递到用户选择的工作区；不能绕过宿主权限和审批 |
 
 没有统一 Hook 并不妨碍任务内自动化。`agent-bridge.mjs` 可以常驻并保持通信通道，但不能替一个已经停止且没有唤醒接口的 Agent 执行新任务。桌面助手是独立进程，可以开机常驻、监督 bridge、显示状态和奖杯；通用安装器不会假装拥有跨平台 GUI 安装能力，也不会在测试或非交互环境默认拉起 Electron。
 

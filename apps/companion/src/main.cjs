@@ -289,11 +289,35 @@ function activeSessions() {
     .map((session) => [session.session_id, session]));
   for (const session of agentConnectionServer?.sessions() || []) {
     for (const [sessionId, existing] of sessions) {
-      if (existing.agent_id === session.agent_id) sessions.delete(sessionId);
+      if (existing.agent_id === session.agent_id && existing.workspace === session.workspace) sessions.delete(sessionId);
     }
     sessions.set(session.session_id, session);
   }
-  return [...sessions.values()];
+  const unique = new Map();
+  for (const session of sessions.values()) {
+    const key = `${session.agent_id}\u0000${session.workspace || ""}`;
+    const current = unique.get(key);
+    if (!current || session.status === "active" || Date.parse(session.observed_at || 0) > Date.parse(current.observed_at || 0)) unique.set(key, session);
+  }
+  return [...unique.values()];
+}
+
+function focusedSession(sessions = activeSessions()) {
+  const selected = companionSettings.focus_workspace;
+  return sessions.find((item) => item.agent_id === selected?.agent_id && item.workspace === selected?.workspace)
+    || sessions.find((item) => item.status === "active")
+    || sessions[0]
+    || null;
+}
+
+function setFocusWorkspace(agentId, workspace) {
+  const session = activeSessions().find((item) => item.agent_id === agentId && item.workspace === workspace);
+  if (!session) throw new Error("workspace-not-connected");
+  companionSettings = { ...companionSettings, focus_workspace: { agent_id: agentId, workspace } };
+  writeSettings();
+  lastPayload = "";
+  sync();
+  return { agent_id: agentId, workspace };
 }
 
 function avatarFiles() { return AVATAR_EXTENSIONS.map((ext) => path.join(DATA_HOME, `avatar.${ext}`)); }
@@ -446,7 +470,7 @@ function currentPayload() {
       state = readJson(STATE_PATH, emptyState());
       claimsDocument = claimRecords();
       const sessionsForPlan = activeSessions();
-      const focusSessionForPlan = sessionsForPlan.find((item) => item.status === "active") || sessionsForPlan[0] || null;
+      const focusSessionForPlan = focusedSession(sessionsForPlan);
       const eventsForPlan = eventRecords();
       const focusAgentForPlan = focusSessionForPlan?.agent_id || state.awards?.at(-1)?.agent_id || eventsForPlan.at(-1)?.actor?.agent_id || null;
       const focusWorkspaceForPlan = focusSessionForPlan?.workspace || null;
@@ -479,7 +503,7 @@ function currentPayload() {
     }
   }
   const sessions = activeSessions();
-  const focusSession = sessions.find((item) => item.status === "active") || sessions[0] || null;
+  const focusSession = focusedSession(sessions);
   const events = eventRecords();
   const focusAgentId = focusSession?.agent_id || state.awards?.at(-1)?.agent_id || events.at(-1)?.actor?.agent_id || null;
   const focusWorkspace = focusSession?.workspace || null;
@@ -715,7 +739,7 @@ function saveAchievement(input) {
   if (existingIndex >= 0) state.achievements[existingIndex] = achievement;
   else state.achievements.push(achievement);
   state.progress[achievement.achievement_id] ??= 0;
-  const focusSession = activeSessions().find((item) => item.status === "active") || activeSessions()[0] || null;
+  const focusSession = focusedSession();
   const agentId = focusSession?.agent_id || null;
   const workspace = focusSession?.workspace || null;
   achievement.extensions = { ...(achievement.extensions || {}), ...(workspace ? { workspace } : {}) };
@@ -758,7 +782,7 @@ function requestAchievementDesign(briefValue) {
   if (!brief || brief.length > 1000) throw new Error("design-brief-invalid");
   const document = readJson(DESIGN_REQUESTS_PATH, { schema_version: "agent-achievements/v1", requests: [] });
   const sessions = activeSessions();
-  const focusSession = sessions.find((item) => item.status === "active") || sessions[0] || null;
+  const focusSession = focusedSession(sessions);
   const request = {
     schema_version: "agent-achievements/v1",
     request_id: `design-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -783,7 +807,7 @@ function requestAchievementDiagnostic() {
   const release = acquireStateLock();
   try {
     const sessions = activeSessions();
-    const focusSession = sessions.find((item) => item.status === "active") || sessions[0] || null;
+    const focusSession = focusedSession(sessions);
     const request = createDiagnosticRequest("manual", focusSession?.agent_id || null, focusSession?.workspace || null);
     lastPayload = "";
     sync();
@@ -793,22 +817,30 @@ function requestAchievementDiagnostic() {
   }
 }
 
-function requestWuxingDiagnostic() {
+async function requestWuxingDiagnostic() {
   const release = acquireStateLock();
+  let queued;
+  let focusSession;
   try {
     const state = readJson(STATE_PATH, emptyState());
     const sessions = activeSessions();
-    const focusSession = sessions.find((item) => item.status === "active") || sessions[0] || null;
+    focusSession = focusedSession(sessions);
     if (!focusSession?.agent_id) throw new Error("agent-not-connected");
     if (!focusSession.workspace) throw new Error("workspace-not-detected");
     const result = queueWuxingDiagnosticAction(state, focusSession.agent_id, focusSession.workspace);
     if (result.created) writeJsonAtomic(STATE_PATH, result.state);
+    queued = result;
     lastPayload = "";
     sync();
-    return { action_id: result.action.action_id, status: result.action.status, created: result.created, workspace: result.action.workspace };
   } finally {
     release();
   }
+  const repository = path.basename(focusSession.workspace);
+  const delivery = await agentConnectionServer.requestPrompt(focusSession.agent_id, focusSession.workspace, {
+    intent: "run_wuxing_diagnostic",
+    text: `请使用已安装的 wuxing-harness Skill，对当前仓库 ${repository} 启动或继续五行诊断。先读取当前仓库的规则、Skills、代码、历史和判断数据库，按三段式流程一次只问一个需要我判断的问题；不要跳到实现，也不要修改未经我确认的高优先级规则。`
+  });
+  return { action_id: queued.action.action_id, status: queued.action.status, created: queued.created, workspace: queued.action.workspace, target_session_status: focusSession.status, delivery };
 }
 
 function confirmDiagnosticDiscovery(requestId, discoveryId) {
@@ -835,7 +867,7 @@ function setAchievementTracking(achievementId, enabled) {
   const achievement = state?.achievements?.find((item) => item.achievement_id === achievementId);
   if (!achievement) throw new Error("achievement-not-found");
   if (enabled && achievement.tracking?.allowed === false) throw new Error("tracking-not-allowed");
-  const focusSession = activeSessions().find((item) => item.status === "active") || activeSessions()[0] || null;
+  const focusSession = focusedSession();
   const agentId = focusSession?.agent_id || state.awards?.at(-1)?.agent_id || eventRecords().at(-1)?.actor?.agent_id || null;
   const workspace = focusSession?.workspace || null;
   const migrated = migrateLegacyAutopilotBlocks(state, agentId, workspace);
@@ -1008,6 +1040,7 @@ if (!hasSingleInstanceLock) {
     ipcMain.handle("companion:set-autostart", (_event, enabled) => setAutostart(Boolean(enabled)));
     ipcMain.handle("companion:get-always-on-top", () => getAlwaysOnTop());
     ipcMain.handle("companion:set-always-on-top", (_event, enabled) => setAlwaysOnTop(Boolean(enabled)));
+    ipcMain.handle("companion:set-focus-workspace", (_event, agentId, workspace) => setFocusWorkspace(String(agentId), String(workspace)));
     ipcMain.handle("companion:request-wuxing-diagnostic", () => requestWuxingDiagnostic());
     ipcMain.handle("companion:save-achievement", (_event, input) => saveAchievement(input));
     ipcMain.handle("companion:set-achievement-tracking", (_event, achievementId, enabled) => setAchievementTracking(String(achievementId), Boolean(enabled)));

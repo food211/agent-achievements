@@ -566,7 +566,11 @@ async function bootstrap() {
     const bridgeSessionId = `bridge-${createHash("sha256").update(`${agentId}\u0000${runtimeId}\u0000${workspace}`).digest("hex").slice(0, 20)}`;
     const bridgeCommand = {
       program: process.execPath,
-      args: [path.join(scriptDirectory, "agent-bridge.mjs"), "--agent", agentId, "--runtime", runtimeId, "--session", bridgeSessionId, "--data-home", root],
+      args: [
+        path.join(scriptDirectory, "agent-bridge.mjs"), "--agent", agentId, "--runtime", runtimeId,
+        "--session", bridgeSessionId, "--data-home", root,
+        ...(runtimeId.toLowerCase().startsWith("codex") && capabilities.includes("hooks") ? ["--prompt-mode", "codex_stop_hook"] : [])
+      ],
       cwd: workspace
     };
     adapter.bridge_command = bridgeCommand;
