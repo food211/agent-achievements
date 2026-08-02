@@ -1,6 +1,8 @@
 const { createClaudeCodeClient } = require("./claude-code-client.cjs");
 const { createCodexAcpClient } = require("./codex-acp-client.cjs");
 const { createWorkBuddyClient } = require("./workbuddy-client.cjs");
+const { createHash } = require("node:crypto");
+const path = require("node:path");
 
 const ADAPTERS = {
   codex: { id: "codex", label: "Codex" },
@@ -14,6 +16,22 @@ function adapterIdForRuntime(runtimeId) {
   if (value.includes("workbuddy") || value.includes("codebuddy") || value === "cbc") return "workbuddy";
   if (value.includes("codex")) return "codex";
   return null;
+}
+
+// A companion conversation belongs to a concrete Agent process in a concrete
+// repository.  Runtime alone is deliberately not enough: two Codex (or two
+// Claude) Agents can work in the same checkout at the same time.
+function targetKey(target) {
+  if (!target?.workspace) throw new Error("workspace-not-detected");
+  const agentId = String(target.agent_id || "agent-local").trim() || "agent-local";
+  const runtimeId = String(target.runtime_id || target.runtime?.id || "unknown").trim() || "unknown";
+  const workspace = path.resolve(target.workspace);
+  return `${agentId}\u0000${runtimeId}\u0000${workspace}`;
+}
+
+function scopedDataHome(dataHome, key) {
+  const digest = createHash("sha256").update(key).digest("hex");
+  return path.join(path.resolve(dataHome || process.cwd()), "agent-adapter-sessions", digest);
 }
 
 function createAgentAdapterFactory(options = {}) {
@@ -32,8 +50,13 @@ function createAgentAdapterFactory(options = {}) {
   function clientFor(target) {
     const info = descriptor(target);
     if (!info) throw new Error(`agent-adapter-unsupported:${target?.runtime_id || target?.runtime?.id || "unknown"}`);
-    if (!clients.has(info.id)) clients.set(info.id, constructors[info.id]({ dataHome: options.dataHome, onChanged: options.onChanged, ...(options.adapterOptions?.[info.id] || {}) }));
-    return { client: clients.get(info.id), info };
+    const key = targetKey(target);
+    if (!clients.has(key)) clients.set(key, constructors[info.id]({
+      dataHome: scopedDataHome(options.dataHome, key),
+      onChanged: options.onChanged,
+      ...(options.adapterOptions?.[info.id] || {})
+    }));
+    return { client: clients.get(key), info };
   }
 
   function annotate(value, info) {
@@ -61,7 +84,7 @@ function createAgentAdapterFactory(options = {}) {
       if (!target?.workspace) return null;
       const info = descriptor(target);
       if (!info) return null;
-      const client = clients.get(info.id);
+      const client = clients.get(targetKey(target));
       return client ? annotate(client.stateFor(target.workspace), info) : null;
     },
     switchSession: (target, sessionId) => invoke("switchSession", target, sessionId),
@@ -69,4 +92,4 @@ function createAgentAdapterFactory(options = {}) {
   };
 }
 
-module.exports = { ADAPTERS, adapterIdForRuntime, createAgentAdapterFactory };
+module.exports = { ADAPTERS, adapterIdForRuntime, createAgentAdapterFactory, scopedDataHome, targetKey };

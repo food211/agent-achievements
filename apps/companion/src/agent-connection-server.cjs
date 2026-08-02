@@ -183,6 +183,12 @@ function createAgentConnectionServer(options) {
     const workspace = typeof message.workspace === "string" && message.workspace.trim()
       ? path.resolve(message.workspace.trim())
       : "";
+    const agentId = typeof message.agent_id === "string" && message.agent_id.trim()
+      ? message.agent_id.trim().slice(0, 128)
+      : "";
+    const runtimeId = typeof message.runtime_id === "string" && message.runtime_id.trim()
+      ? message.runtime_id.trim().slice(0, 80)
+      : "";
     if (!requestId || !workspace || !text || text.length > 8_000) {
       send(socket, { type: "assistant_prompt_ack", schema_version: VERSION, request_id: requestId, status: "failed", detail: "invalid-assistant-prompt" });
       return;
@@ -192,7 +198,7 @@ function createAgentConnectionServer(options) {
       return;
     }
     socket.assistantPromptRunning = true;
-    Promise.resolve(options.onAssistantPrompt?.({ workspace, text, requestId }))
+    Promise.resolve(options.onAssistantPrompt?.({ agentId, runtimeId, workspace, text, requestId }))
       .then((delivery) => send(socket, {
         type: "assistant_prompt_ack",
         schema_version: VERSION,

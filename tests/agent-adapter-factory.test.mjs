@@ -41,3 +41,20 @@ test("the adapter factory constructs vendors lazily and exposes one interface", 
   assert.deepEqual(created, ["claude-code"]);
   await assert.rejects(factory.connect({ runtime_id: "other", workspace: "C:/demo" }), /agent-adapter-unsupported/);
 });
+
+test("the factory isolates same-runtime Agents in the same workspace", async () => {
+  const homes = [];
+  const make = () => (options) => {
+    homes.push(options.dataHome);
+    return {
+      connect: async (workspace) => ({ workspace, status: "ready" }),
+      listSessions: async () => [], resetSession: async () => ({}), runPrompt: async () => ({}),
+      stateFor: () => null, switchSession: async () => ({}), stop() {}
+    };
+  };
+  const factory = createAgentAdapterFactory({ dataHome: "C:/companion", createCodex: make() });
+  await factory.connect({ agent_id: "agent-a", runtime_id: "codex", workspace: "C:/demo" });
+  await factory.connect({ agent_id: "agent-b", runtime_id: "codex", workspace: "C:/demo" });
+  assert.equal(homes.length, 2);
+  assert.notEqual(homes[0], homes[1]);
+});

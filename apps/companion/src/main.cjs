@@ -296,7 +296,9 @@ function activeSessions() {
     .map((session) => [session.session_id, session]));
   for (const session of agentConnectionServer?.sessions() || []) {
     for (const [sessionId, existing] of sessions) {
-      if (existing.agent_id === session.agent_id && existing.workspace === session.workspace) sessions.delete(sessionId);
+      if (existing.agent_id === session.agent_id
+        && existing.workspace === session.workspace
+        && (existing.runtime?.id || "") === (session.runtime?.id || "")) sessions.delete(sessionId);
     }
     sessions.set(session.session_id, session);
   }
@@ -313,7 +315,7 @@ function activeSessions() {
     const conversation = agentAdapters?.stateFor(target);
     sessions.set(`known:${createHash("sha256").update(targetKey).digest("hex").slice(0, 16)}`, {
       schema_version: "agent-achievements/v1",
-      session_id: `known-${createHash("sha256").update(workspace).digest("hex").slice(0, 16)}`,
+      session_id: `known-${createHash("sha256").update(targetKey).digest("hex").slice(0, 16)}`,
       agent_id: target.agent_id,
       runtime: { id: runtimeId },
       workspace,
@@ -1228,8 +1230,12 @@ if (!hasSingleInstanceLock) {
       dataHome: DATA_HOME,
       getContext: connectionContext,
       onChanged: () => { lastPayload = ""; sync(); },
-      onAssistantPrompt: ({ workspace, text }) => {
-        const session = activeSessions().find((item) => item.workspace === workspace) || focusedSession();
+      onAssistantPrompt: ({ agentId, runtimeId, workspace, text }) => {
+        const matches = activeSessions().filter((item) => item.workspace === workspace
+          && (!agentId || item.agent_id === agentId)
+          && (!runtimeId || item.runtime?.id === runtimeId));
+        if (matches.length !== 1) throw new Error(matches.length ? "assistant-target-ambiguous" : "assistant-target-not-connected");
+        const session = matches[0];
         return agentAdapters.runPrompt(adapterTarget(session), text);
       }
     });

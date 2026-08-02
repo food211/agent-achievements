@@ -70,11 +70,15 @@ test("Electron launches the ACP adapter in Node mode", () => {
   assert.equal(childEnvironment({ PATH: "test" }, { node: "22.0.0" }).ELECTRON_RUN_AS_NODE, undefined);
 });
 
-test("read-only sessions allow commands once but reject edits and broader permissions", () => {
+test("read-only sessions reject commands unless a narrow explicit policy permits one", () => {
   assert.deepEqual(permissionOutcome({
-    toolCall: { kind: "execute" },
+    toolCall: { kind: "execute", rawInput: { command: "git status" } },
     options: [{ optionId: "allow-once", kind: "allow_once" }, { optionId: "deny", kind: "reject_once" }]
-  }), { outcome: { outcome: "selected", optionId: "allow-once" } });
+  }), { outcome: { outcome: "cancelled" } });
+  assert.deepEqual(permissionOutcome({
+    toolCall: { kind: "execute", rawInput: { command: "git status" } },
+    options: [{ optionId: "allow-once", kind: "allow_once" }]
+  }, { allowCommands: true, allowedCommands: ["git status"] }), { outcome: { outcome: "selected", optionId: "allow-once" } });
   assert.deepEqual(permissionOutcome({
     toolCall: { kind: "edit" },
     options: [{ optionId: "allow-once", kind: "allow_once" }]

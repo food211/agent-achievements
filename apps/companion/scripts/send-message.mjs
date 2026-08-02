@@ -55,7 +55,15 @@ export async function sendCompanionMessage(options) {
   const welcome = await nextLine();
   if (welcome.type !== "assistant_welcome") throw new Error("Companion did not accept the assistant client.");
   const requestId = randomUUID();
-  socket.write(`${JSON.stringify({ type: "assistant_prompt", schema_version: VERSION, request_id: requestId, workspace, text })}\n`);
+  socket.write(`${JSON.stringify({
+    type: "assistant_prompt",
+    schema_version: VERSION,
+    request_id: requestId,
+    workspace,
+    text,
+    ...(options.agentId ? { agent_id: String(options.agentId) } : {}),
+    ...(options.runtimeId ? { runtime_id: String(options.runtimeId) } : {})
+  })}\n`);
   const response = await nextLine();
   socket.end();
   if (response.type !== "assistant_prompt_ack" || response.status !== "accepted") throw new Error(response.detail || "Companion rejected the message.");
@@ -63,7 +71,7 @@ export async function sendCompanionMessage(options) {
 }
 
 function usage() {
-  return "Usage: node send-message.mjs --workspace <path> --message <text> [--data-home <path>] [--client-id <id>]";
+  return "Usage: node send-message.mjs --workspace <path> --message <text> [--agent-id <id>] [--runtime-id <id>] [--data-home <path>] [--client-id <id>]";
 }
 
 const invoked = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : "";

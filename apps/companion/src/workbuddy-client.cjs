@@ -1,6 +1,6 @@
 const { randomUUID } = require("node:crypto");
 const path = require("node:path");
-const { createSessionStore } = require("./codex-acp-client.cjs");
+const { createCodexAcpClient, createSessionStore } = require("./codex-acp-client.cjs");
 
 const STORE_VERSION = "wuxing-companion-workbuddy-sessions/v1";
 const DEFAULT_ENDPOINT = "http://127.0.0.1:8080";
@@ -24,10 +24,36 @@ function extractText(value, depth = 0) {
   return "";
 }
 
-function createWorkBuddyClient(options = {}) {
+function safeEndpoint(value, token = "") {
+  const endpoint = new URL(String(value || DEFAULT_ENDPOINT));
+  const loopback = ["127.0.0.1", "localhost", "::1", "[::1]"].includes(endpoint.hostname);
+  if (!loopback && (endpoint.protocol !== "https:" || !token)) {
+    throw new Error("workbuddy-remote-endpoint-requires-https-and-token");
+  }
+  return endpoint.toString().replace(/\/$/, "");
+}
+
+function consumeSse(buffer, onEvent) {
+  let remainder = buffer;
+  const separator = /\r?\n\r?\n/;
+  let match;
+  while ((match = separator.exec(remainder))) {
+    const event = remainder.slice(0, match.index);
+    remainder = remainder.slice(match.index + match[0].length);
+    const payload = event.split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart())
+      .join("\n");
+    if (payload) onEvent(payload);
+  }
+  return remainder;
+}
+
+function createWorkBuddyRestClient(options = {}) {
   const onChanged = options.onChanged || (() => {});
   const request = options.fetch || globalThis.fetch;
-  const endpoint = String(options.endpoint || process.env.WORKBUDDY_URL || process.env.CODEBUDDY_URL || DEFAULT_ENDPOINT).replace(/\/$/, "");
+  const token = String(options.token || process.env.WORKBUDDY_TOKEN || process.env.CODEBUDDY_TOKEN || "");
+  const endpoint = safeEndpoint(options.endpoint || process.env.WORKBUDDY_URL || process.env.CODEBUDDY_URL || DEFAULT_ENDPOINT, token);
   const sessionStore = options.sessionStore || createSessionStore(path.resolve(options.dataHome || process.cwd()), {
     fileName: "workbuddy-agent-sessions.json",
     schemaVersion: STORE_VERSION
@@ -36,7 +62,7 @@ function createWorkBuddyClient(options = {}) {
   let stopped = false;
 
   function notify() { try { onChanged(); } catch { /* UI updates must not interrupt a run. */ } }
-  function headers(extra = {}) { return { "X-CodeBuddy-Request": "1", ...extra }; }
+  function headers(extra = {}) { return { "X-CodeBuddy-Request": "1", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extra }; }
   async function api(route, init = {}) {
     const response = await request(`${endpoint}${route}`, { ...init, headers: headers(init.headers) });
     const body = await response.json().catch(() => ({}));
@@ -141,17 +167,17 @@ function createWorkBuddyClient(options = {}) {
       let buffer = "";
       for await (const chunk of response.body) {
         buffer += decoder.decode(chunk, { stream: true });
-        let boundary;
-        while ((boundary = buffer.indexOf("\n\n")) >= 0) {
-          const event = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
-          const payload = event.split(/\r?\n/).filter((line) => line.startsWith("data:" )).map((line) => line.slice(5).trim()).join("\n");
-          if (!payload || payload === "[DONE]") continue;
+        buffer = consumeSse(buffer, (payload) => {
+          if (!payload || payload === "[DONE]") return;
           try {
             const text = extractText(JSON.parse(payload));
-            if (text) { entry.output = clip(text); entry.activity = "WorkBuddy 正在回复"; notify(); }
+            if (text) {
+              entry.output = clip(text.startsWith(entry.output) ? text : `${entry.output}${text}`);
+              entry.activity = "WorkBuddy 正在回复";
+              notify();
+            }
           } catch { /* Ignore non-JSON keepalive events. */ }
-        }
+        });
       }
       if (entry.output.trim()) entry.messages.push({ role: "assistant", text: entry.output.trim(), at: new Date().toISOString() });
       entry.messages = entry.messages.slice(-MAX_MESSAGES);
@@ -175,4 +201,25 @@ function createWorkBuddyClient(options = {}) {
   return { connect, listSessions, resetSession, runPrompt, stateFor, stop, switchSession };
 }
 
-module.exports = { DEFAULT_ENDPOINT, STORE_VERSION, createWorkBuddyClient, extractText };
+function createWorkBuddyAcpClient(options = {}) {
+  const command = options.command || process.env.WORKBUDDY_COMMAND || process.env.CODEBUDDY_COMMAND || "codebuddy";
+  const args = options.args || ["--acp"];
+  const sessionStore = options.sessionStore || createSessionStore(path.resolve(options.dataHome || process.cwd()), {
+    fileName: "workbuddy-agent-sessions.json",
+    schemaVersion: STORE_VERSION
+  });
+  return createCodexAcpClient({
+    ...options,
+    adapterName: "WorkBuddy",
+    errorPrefix: "workbuddy-acp",
+    sessionStore,
+    launch: options.launch || (() => ({ program: command, args, env: options.env || {} }))
+  });
+}
+
+function createWorkBuddyClient(options = {}) {
+  const transport = String(options.transport || process.env.WORKBUDDY_TRANSPORT || "acp").toLowerCase();
+  return transport === "rest" ? createWorkBuddyRestClient(options) : createWorkBuddyAcpClient(options);
+}
+
+module.exports = { DEFAULT_ENDPOINT, STORE_VERSION, consumeSse, createWorkBuddyAcpClient, createWorkBuddyClient, createWorkBuddyRestClient, extractText, safeEndpoint };

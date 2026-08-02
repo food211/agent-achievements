@@ -35,12 +35,23 @@ function childEnvironment(environment = process.env, versions = process.versions
   };
 }
 
-function permissionOutcome(request) {
-  if (request?.toolCall?.kind !== "execute") return { outcome: { outcome: "cancelled" } };
+function permissionOutcome(request, options = {}) {
+  // A desktop conversation must not silently turn into a shell approval
+  // surface.  ACP agents may ask for network or broader sandbox escalation as
+  // part of an execute request, so accepting every `allow_once` is unsafe.
+  if (options.allowCommands !== true || request?.toolCall?.kind !== "execute") {
+    return { outcome: { outcome: "cancelled" } };
+  }
+  if (request.params?.networkApprovalContext || request.toolCall?.networkApprovalContext || request.toolCall?.rawInput?.networkApprovalContext) {
+    return { outcome: { outcome: "cancelled" } };
+  }
+  const command = String(request.toolCall?.rawInput?.command || request.toolCall?.command || "").trim();
+  const allowed = Array.isArray(options.allowedCommands) ? options.allowedCommands : [];
+  if (!command || !allowed.some((pattern) => pattern instanceof RegExp ? pattern.test(command) : command === String(pattern))) {
+    return { outcome: { outcome: "cancelled" } };
+  }
   const allowOnce = request.options?.find((option) => option.kind === "allow_once");
-  return allowOnce
-    ? { outcome: { outcome: "selected", optionId: allowOnce.optionId } }
-    : { outcome: { outcome: "cancelled" } };
+  return allowOnce ? { outcome: { outcome: "selected", optionId: allowOnce.optionId } } : { outcome: { outcome: "cancelled" } };
 }
 
 function sameWorkspace(left, right) {
@@ -96,6 +107,8 @@ function createSessionStore(dataHome, options = {}) {
 }
 
 function createCodexAcpClient(options = {}) {
+  const adapterName = options.adapterName || "Codex";
+  const errorPrefix = options.errorPrefix || "codex-acp";
   const onChanged = options.onChanged || (() => {});
   const spawnProcess = options.spawnProcess || spawn;
   const resolveAgentPath = options.resolveAgentPath || (() => require.resolve("@agentclientprotocol/codex-acp"));
@@ -175,12 +188,12 @@ function createCodexAcpClient(options = {}) {
       return;
     }
     if (Object.prototype.hasOwnProperty.call(message, "id") && message.method === "session/request_permission") {
-      const outcome = permissionOutcome(message.params);
+      const outcome = permissionOutcome(message.params, options.permissionPolicy);
       respond(entry, message.id, outcome);
       setEntry(entry, {
         activity: outcome.outcome.outcome === "selected"
-          ? "已允许一条受只读沙箱约束的检查命令"
-          : "已拒绝写入或额外权限请求"
+          ? "已允许一条明确配置的检查命令"
+          : "已拒绝需要额外权限的操作"
       });
       return;
     }
@@ -229,14 +242,18 @@ function createCodexAcpClient(options = {}) {
   }
 
   async function startEntry(entry) {
-    const agentPath = resolveAgentPath();
-    entry.child = spawnProcess(process.execPath, [agentPath], {
+    const launch = options.launch
+      ? options.launch(entry)
+      : { program: process.execPath, args: [resolveAgentPath()], env: {} };
+    if (!launch?.program || !Array.isArray(launch.args)) throw new Error(`${errorPrefix}-launch-invalid`);
+    entry.child = spawnProcess(launch.program, launch.args, {
       cwd: entry.workspace,
       windowsHide: true,
       shell: false,
       stdio: ["pipe", "pipe", "pipe"],
       env: {
         ...childEnvironment(),
+        ...(launch.env || {}),
         INITIAL_AGENT_MODE: "read-only",
         APP_SERVER_LOGS: path.join(options.dataHome || entry.workspace, "codex-acp-logs")
       }
@@ -249,7 +266,7 @@ function createCodexAcpClient(options = {}) {
     entry.child.once("exit", (code, signal) => {
       if (entry.closing) return;
       const detail = entry.stderr.trim().split(/\r?\n/).at(-1);
-      const error = new Error(detail || `Codex ACP 已退出（${signal || code}）`);
+      const error = new Error(detail || `${adapterName} ACP 已退出（${signal || code}）`);
       rejectPending(entry, error);
       setEntry(entry, { status: "failed", error: error.message, completedAt: new Date().toISOString() });
       sessions.delete(entry.workspace);
@@ -260,12 +277,13 @@ function createCodexAcpClient(options = {}) {
       clientInfo: { name: "wuxing-harness-companion", version: "0.1.0" }
     });
     if (initialized?.protocolVersion !== PROTOCOL_VERSION) throw new Error("codex-acp-protocol-mismatch");
+    entry.capabilities = initialized?.agentCapabilities?.sessionCapabilities || {};
     const selection = pendingSessionSelections.get(entry.workspace) || null;
     pendingSessionSelections.delete(entry.workspace);
     const saved = selection
       ? { session_id: selection.sessionId, messages: [] }
       : sessionStore.get(entry.workspace);
-    const canResume = initialized?.agentCapabilities?.sessionCapabilities?.resume !== undefined;
+    const canResume = entry.capabilities?.resume !== undefined;
     const canLoad = initialized?.agentCapabilities?.loadSession === true;
     const forceLoad = Boolean(selection);
     let resumed = false;
@@ -304,7 +322,7 @@ function createCodexAcpClient(options = {}) {
       entry.sessionId = session.sessionId;
     }
     saveEntry(entry);
-    setEntry(entry, { status: "ready", activity: resumed ? "已恢复助手对话，等待消息" : "Codex 已连接，等待消息" });
+    setEntry(entry, { status: "ready", activity: resumed ? `已恢复 ${adapterName} 助手对话，等待消息` : `${adapterName} 已连接，等待消息` });
     return entry;
   }
 
@@ -320,7 +338,7 @@ function createCodexAcpClient(options = {}) {
       workspace: normalized,
       status: "connecting",
       output: "",
-      activity: "正在连接本机 Codex",
+      activity: `正在连接本机 ${adapterName}`,
       error: "",
       sessionId: null,
       startedAt: new Date().toISOString(),
@@ -336,7 +354,8 @@ function createCodexAcpClient(options = {}) {
       historyKey: null,
       historyRole: null,
       historySequence: 0,
-      running: null
+      running: null,
+      capabilities: null
     };
     sessions.set(normalized, entry);
     notify();
@@ -439,8 +458,15 @@ function createCodexAcpClient(options = {}) {
     const normalized = path.resolve(workspace);
     const entry = await ensureSession(normalized);
     if (entry.running && entry.status === "streaming") throw new Error("codex-acp-prompt-in-progress");
-    const response = await request(entry, "session/list", { cwd: normalized, cursor: null });
-    return (response?.sessions || [])
+    if (entry.capabilities?.list === undefined) throw new Error(`${errorPrefix}-session-list-unsupported`);
+    const listed = [];
+    let cursor = null;
+    do {
+      const response = await request(entry, "session/list", { cwd: normalized, cursor });
+      listed.push(...(response?.sessions || []));
+      cursor = response?.nextCursor || null;
+    } while (cursor && listed.length < 120);
+    return listed
       .filter((item) => item?.sessionId && item?.cwd && sameWorkspace(item.cwd, normalized))
       .map((item) => ({
         session_id: String(item.sessionId),

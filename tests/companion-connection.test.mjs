@@ -143,11 +143,13 @@ test("another local Code Agent can send a message to the companion-owned session
   const nextLine = lines(client);
   client.write(`${JSON.stringify({ type: "assistant_client", schema_version: "agent-achievements/v1", token: endpoint.token, client_id: "other-thread" })}\n`);
   assert.equal((await nextLine()).type, "assistant_welcome");
-  client.write(`${JSON.stringify({ type: "assistant_prompt", schema_version: "agent-achievements/v1", request_id: "request-1", workspace: process.cwd(), text: "请检查这条规则" })}\n`);
+  client.write(`${JSON.stringify({ type: "assistant_prompt", schema_version: "agent-achievements/v1", request_id: "request-1", agent_id: "other-agent", runtime_id: "claude-code", workspace: process.cwd(), text: "请检查这条规则" })}\n`);
   const ack = await nextLine();
   assert.equal(ack.status, "accepted");
   assert.equal(ack.session_id, "assistant-session-1");
   assert.equal(received[0].text, "请检查这条规则");
+  assert.equal(received[0].agentId, "other-agent");
+  assert.equal(received[0].runtimeId, "claude-code");
   assert.equal(server.sessions().length, 0, "one-shot assistant clients must not appear as active Agent sessions");
   client.end();
 });
