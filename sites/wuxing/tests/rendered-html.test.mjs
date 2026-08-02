@@ -21,7 +21,19 @@ test("server-renders the Wuxing Harness rule audit", async () => {
   assert.match(html, /给 AI 的规则做一次代谢/);
   assert.match(html, /发现的问题/);
   assert.match(html, /批准并覆盖/);
+  assert.match(html, /href="\/install"/);
   assert.doesNotMatch(html, /五行创作调控|引水|改稿/);
+});
+
+test("renders an install guide for Agent-led and manual setup", async () => {
+  const response = await render("/install");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /把安装交给 Agent/);
+  assert.match(html, /复制安装指令/);
+  assert.match(html, /第一次怎么用/);
+  assert.match(html, /skills\/wuxing-harness/);
+  assert.match(html, /工作区内容不会发到这个网站/);
 });
 
 test("the public demo no longer exposes the writing model endpoint", async () => {

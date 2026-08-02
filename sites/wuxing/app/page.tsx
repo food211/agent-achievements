@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type Status = "pending" | "applied" | "rejected";
 type Finding = {
@@ -130,7 +131,7 @@ export default function Home() {
       <header className="masthead">
         <div className="brand-mark" aria-hidden="true"><i /><i /><i /><i /><i /><span>克</span></div>
         <div className="brand-copy"><small>WUXING AGENT HARNESS</small><h1>五行 Harness</h1><p>给 AI 的规则做一次代谢</p></div>
-        <button className="quiet-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "浅色" : "深色"}</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Link className="quiet-button" style={{ textDecoration: "none" }} href="/install">安装 Skill</Link><button className="quiet-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "浅色" : "深色"}</button></div>
       </header>
 
       <section className="hero">
@@ -167,7 +168,7 @@ export default function Home() {
         </article>
       </section>
 
-      <footer><p><b>这次只做三条克线。</b>完整非阻塞任务队列、木克土、土克水和旺衰诊断还没有做。</p><a href="https://github.com/food211/agent-achievements" target="_blank" rel="noreferrer">安装 Skill</a></footer>
+      <footer><p><b>这次只做三条克线。</b>完整非阻塞任务队列、木克土、土克水和旺衰诊断还没有做。</p><Link href="/install">安装 Skill</Link></footer>
     </main>
   );
 }
