@@ -159,7 +159,7 @@ function renderAutopilot(automation) {
 
 function render(payload) {
   latestSessions = payload.sessions || [];
-  const session = latestSessions.find((item) => item.agent_id === payload.focusAgentId && item.workspace === payload.focusWorkspace)
+  const session = latestSessions.find((item) => item.agent_id === payload.focusAgentId && item.workspace === payload.focusWorkspace && (!payload.focusRuntimeId || item.runtime?.id === payload.focusRuntimeId))
     || latestSessions.find((item) => item.status === "active")
     || latestSessions[0];
   const isActive = session?.status === "active";
@@ -168,8 +168,8 @@ function render(payload) {
   workspaceSelector.innerHTML = latestSessions.length
     ? latestSessions.map((item, index) => {
       const name = item.workspace ? item.workspace.replace(/[\\/]+$/, "").split(/[\\/]/).pop() : item.runtime.id;
-      const selected = item.agent_id === session?.agent_id && item.workspace === session?.workspace ? " selected" : "";
-      return `<option value="${index}"${selected}>${escapeHtml(name)} · ${escapeHtml(item.agent_id)}</option>`;
+      const selected = item.agent_id === session?.agent_id && item.workspace === session?.workspace && item.runtime?.id === session?.runtime?.id ? " selected" : "";
+      return `<option value="${index}"${selected}>${escapeHtml(name)} · ${escapeHtml(item.runtime?.id || item.agent_id)}</option>`;
     }).join("")
     : "<option>Agent 休息中</option>";
   workspaceSelector.disabled = latestSessions.length < 2;
@@ -370,7 +370,7 @@ workspaceSelector.addEventListener("change", async () => {
   if (!session) return;
   diagnosisRequestStatus.textContent = `正在切换到 ${session.workspace.replace(/[\\/]+$/, "").split(/[\\/]/).pop()}…`;
   try {
-    await window.agentCompanion.setFocusWorkspace(session.agent_id, session.workspace);
+    await window.agentCompanion.setFocusWorkspace(session.agent_id, session.workspace, session.runtime?.id || "");
     diagnosisRequestStatus.textContent = "";
   } catch (error) {
     diagnosisRequestStatus.textContent = `切换失败：${error?.message || "请重试"}`;

@@ -120,6 +120,10 @@ node scripts/install-agent-skills.mjs --workspace <你的项目目录>
 
 只安装五行 Harness 不需要桌面助手、长连接或成就系统。桌宠目前仍在开发中，可以按需选择安装，不影响 Harness Skill 独立运行。
 
+桌面助手内部使用统一的 Agent Adapter 工厂，不把聊天能力绑死在 Codex 上。当前内置三种适配：Codex 通过 ACP 保持仓库会话；Claude Code 通过官方 Agent SDK 列出、恢复和继续会话；WorkBuddy（CodeBuddy）通过本机 HTTP API 投递消息并接收流式结果。助手依据连接上报的 `runtime` 自动选择适配器，界面仍只呈现“仓库、对话、消息”这一套共同操作。
+
+不同宿主只声明真实能力：没有历史消息读取接口时仍可继续原会话，但不会伪造历史回放；本机服务没有启动时也不会显示成已连接。桌宠尚未作为公开安装项提供，这部分目前用于本机联调。
+
 GitHub 仓库：[food211/harness-assistant](https://github.com/food211/harness-assistant)
 
 ## 联系方式

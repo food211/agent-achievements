@@ -115,7 +115,9 @@ Start the desktop companion:
 npm run companion
 ```
 
-The companion keeps one durable Codex session per repository and resumes the same context after restart. Another local Code Agent thread can submit a message to that repository's companion session through the token-authenticated loopback endpoint; the reply stays in the pet chat bubble instead of entering the sender's thread:
+The companion uses an Agent Adapter factory rather than binding chat to one vendor. Codex uses ACP, Claude Code uses the official Agent SDK, and WorkBuddy/CodeBuddy uses its local HTTP API. The active adapter is selected from the connected runtime, while the UI keeps one common repository, session, and messaging model. Capabilities degrade honestly: an adapter without history replay can still resume context, but the companion does not invent missing transcript data.
+
+Another local Code Agent thread can submit a message to the selected repository session through the token-authenticated loopback endpoint; the reply stays in the pet chat bubble instead of entering the sender's thread:
 
 ```powershell
 node apps/companion/scripts/send-message.mjs --workspace <repository-path> --message <message>

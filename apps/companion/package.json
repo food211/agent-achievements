@@ -7,10 +7,11 @@
   "main": "src/main.cjs",
   "scripts": {
     "start": "node scripts/start.mjs",
-    "build": "node --check scripts/start.mjs && node --check scripts/send-message.mjs && node --check src/main.cjs && node --check src/codex-acp-client.cjs && node --check src/companion-bubble.cjs && node --check src/agent-connection-server.cjs && node --check src/bridge-supervisor.cjs && node --check src/achievement-factory.cjs && node --check src/geometry.cjs && node --check src/preload.cjs && node --check src/bubble-preload.cjs && node --check src/bubble.js && node --check src/renderer.js"
+    "build": "node --check scripts/start.mjs && node --check scripts/send-message.mjs && node --check src/main.cjs && node --check src/agent-adapter-factory.cjs && node --check src/codex-acp-client.cjs && node --check src/claude-code-client.cjs && node --check src/workbuddy-client.cjs && node --check src/companion-bubble.cjs && node --check src/agent-connection-server.cjs && node --check src/bridge-supervisor.cjs && node --check src/achievement-factory.cjs && node --check src/geometry.cjs && node --check src/preload.cjs && node --check src/bubble-preload.cjs && node --check src/bubble.js && node --check src/renderer.js"
   },
   "dependencies": {
-    "@agentclientprotocol/codex-acp": "1.1.8"
+    "@agentclientprotocol/codex-acp": "1.1.8",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.220"
   },
   "devDependencies": {
     "electron": "^43.2.0"

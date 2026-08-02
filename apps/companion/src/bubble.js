@@ -9,6 +9,7 @@ const activity = document.getElementById("activity");
 const form = document.getElementById("form");
 const input = document.getElementById("input");
 const close = document.getElementById("close");
+const newConversation = document.getElementById("new-conversation");
 const marks = { award: "奖", claim: "候", reply: "水", error: "止" };
 let mode = "notification";
 let latestState = null;
@@ -22,9 +23,10 @@ function renderState(payload) {
   latestState = payload;
   const previousScrollTop = messages.scrollTop;
   const shouldFollow = mode !== "chat" || followLatest;
-  const session = (payload.sessions || []).find((item) => item.agent_id === payload.focusAgentId && item.workspace === payload.focusWorkspace)
+  const session = (payload.sessions || []).find((item) => item.agent_id === payload.focusAgentId && item.workspace === payload.focusWorkspace && (!payload.focusRuntimeId || item.runtime?.id === payload.focusRuntimeId))
     || payload.sessions?.[0];
-  workspace.textContent = session?.workspace?.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "当前仓库";
+  const repository = session?.workspace?.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "当前仓库";
+  workspace.textContent = `${repository}${payload.agentConversation?.adapter_label ? ` · ${payload.agentConversation.adapter_label}` : ""}`;
   const conversation = payload.agentConversation;
   const busy = ["connecting", "streaming"].includes(conversation?.status);
   activity.textContent = conversation?.error || conversation?.activity || (session ? "等待你的消息" : "等待 Code Agent 连接");
@@ -71,6 +73,23 @@ window.companionBubble.onMessage((message) => {
 window.companionBubble.onState(renderState);
 notification.addEventListener("click", () => window.companionBubble.open());
 close.addEventListener("click", () => window.companionBubble.dismiss());
+newConversation.addEventListener("click", async () => {
+  newConversation.disabled = true;
+  try {
+    const result = await window.companionBubble.newAgentConversation();
+    if (result?.created) {
+      followLatest = true;
+      activity.textContent = "新对话已准备好";
+      requestAnimationFrame(() => input.focus());
+    }
+  } catch (error) {
+    activity.textContent = String(error?.message || "").includes("prompt-in-progress")
+      ? "Agent 正在回复，请稍后再新建对话"
+      : `新建对话失败：${error?.message || "请重试"}`;
+  } finally {
+    newConversation.disabled = false;
+  }
+});
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const text = input.value.trim();

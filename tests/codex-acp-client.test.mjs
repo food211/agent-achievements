@@ -27,10 +27,18 @@ function fakeCodexAcp(options = {}) {
       const request = JSON.parse(buffer.slice(0, newline));
       buffer = buffer.slice(newline + 1);
       child.requests.push(request);
-      if (request.method === "initialize") child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { protocolVersion: 1, agentCapabilities: { ...(options.resume ? { sessionCapabilities: { resume: {} } } : {}), ...(options.load ? { loadSession: true } : {}) }, authMethods: [] } })}\n`);
+      if (request.method === "initialize") child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { protocolVersion: 1, agentCapabilities: { sessionCapabilities: { ...(options.resume ? { resume: {} } : {}), ...(options.list ? { list: {} } : {}) }, ...(options.load ? { loadSession: true } : {}) }, authMethods: [] } })}\n`);
       if (request.method === "session/new") child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { sessionId: options.sessionId || "session-local" } })}\n`);
+      if (request.method === "session/list") child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { sessions: options.sessions || [], nextCursor: null } })}\n`);
       if (request.method === "session/resume") child.stdout.write(`${JSON.stringify(options.resumeFailure ? { jsonrpc: "2.0", id: request.id, error: { code: -32000, message: "resume failed" } } : { jsonrpc: "2.0", id: request.id, result: {} })}\n`);
-      if (request.method === "session/load") child.stdout.write(`${JSON.stringify(options.loadFailure ? { jsonrpc: "2.0", id: request.id, error: { code: -32000, message: "load failed" } } : { jsonrpc: "2.0", id: request.id, result: {} })}\n`);
+      if (request.method === "session/load") {
+        if (!options.loadFailure) {
+          for (const [index, item] of (options.history || []).entries()) {
+            child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", method: "session/update", params: { sessionId: request.params.sessionId, update: { sessionUpdate: item.role === "user" ? "user_message_chunk" : "agent_message_chunk", messageId: `history-${index}`, content: { type: "text", text: item.text } } } })}\n`);
+          }
+        }
+        child.stdout.write(`${JSON.stringify(options.loadFailure ? { jsonrpc: "2.0", id: request.id, error: { code: -32000, message: "load failed" } } : { jsonrpc: "2.0", id: request.id, result: {} })}\n`);
+      }
       if (request.method === "session/prompt") {
         const sessionId = request.params.sessionId;
         child.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update: { sessionUpdate: "tool_call", title: "正在读取规则" } } })}\n`);
@@ -176,4 +184,77 @@ test("failed restore preserves the saved session instead of silently replacing i
   assert.equal(child.requests.some((item) => item.method === "session/new"), false);
   assert.equal(second.stateFor(workspace).session_id, "preserved-session");
   assert.ok(second.stateFor(workspace).messages.some((item) => item.text === "第一轮"));
+});
+
+test("resetting a workspace starts a clean session and leaves the old Codex thread untouched", async (t) => {
+  const dataHome = await mkdtemp(path.join(os.tmpdir(), "companion-acp-reset-"));
+  t.after(() => rm(dataHome, { recursive: true, force: true }));
+  const children = [];
+  let launch = 0;
+  const client = createCodexAcpClient({
+    dataHome,
+    resolveAgentPath: () => "fake-codex-acp.js",
+    spawnProcess: () => {
+      launch += 1;
+      const child = fakeCodexAcp({ sessionId: `session-${launch}` });
+      children.push(child);
+      return child;
+    }
+  });
+  t.after(() => client.stop());
+  const workspace = process.cwd();
+  await client.runPrompt(workspace, "旧对话");
+  await waitFor(() => client.stateFor(workspace)?.status === "completed");
+
+  const replacement = await client.resetSession(workspace);
+  assert.equal(replacement.session_id, "session-2");
+  assert.deepEqual(replacement.messages, []);
+  assert.equal(children[0].killed, true);
+  assert.equal(children[1].requests.some((item) => item.method === "session/new"), true);
+  assert.equal(client.stateFor(workspace).session_id, "session-2");
+});
+
+test("the companion lists repository history and switches to a selected Codex session", async (t) => {
+  const dataHome = await mkdtemp(path.join(os.tmpdir(), "companion-acp-switch-"));
+  t.after(() => rm(dataHome, { recursive: true, force: true }));
+  const workspace = process.cwd();
+  const sessions = [
+    { sessionId: "current-session", cwd: workspace, title: "当前对话", updatedAt: "2026-08-02T08:00:00.000Z" },
+    { sessionId: "history-session", cwd: workspace, title: "修复历史问题", updatedAt: "2026-08-01T08:00:00.000Z" },
+    { sessionId: "other-repository", cwd: path.dirname(workspace), title: "其他仓库", updatedAt: "2026-08-01T07:00:00.000Z" }
+  ];
+  const children = [];
+  let launch = 0;
+  const client = createCodexAcpClient({
+    dataHome,
+    resolveAgentPath: () => "fake-codex-acp.js",
+    spawnProcess: () => {
+      launch += 1;
+      const child = fakeCodexAcp({
+        sessionId: "current-session",
+        list: true,
+        load: true,
+        sessions,
+        history: launch > 1 ? [
+          { role: "user", text: "帮我修复历史问题" },
+          { role: "assistant", text: "历史问题已经修复" }
+        ] : []
+      });
+      children.push(child);
+      return child;
+    }
+  });
+  t.after(() => client.stop());
+  await client.connect(workspace);
+
+  const history = await client.listSessions(workspace);
+  assert.deepEqual(history.map((item) => item.session_id), ["current-session", "history-session"]);
+  const selected = await client.switchSession(workspace, "history-session");
+  assert.equal(selected.session_id, "history-session");
+  assert.deepEqual(selected.messages.map((item) => [item.role, item.text]), [
+    ["user", "帮我修复历史问题"],
+    ["assistant", "历史问题已经修复"]
+  ]);
+  assert.equal(children[0].killed, true);
+  assert.ok(children[1].requests.some((item) => item.method === "session/load" && item.params.sessionId === "history-session"));
 });

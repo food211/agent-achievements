@@ -43,16 +43,21 @@ function permissionOutcome(request) {
     : { outcome: { outcome: "cancelled" } };
 }
 
-function createSessionStore(dataHome) {
-  const file = path.join(dataHome, "codex-acp-sessions.json");
+function sameWorkspace(left, right) {
+  return path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase();
+}
+
+function createSessionStore(dataHome, options = {}) {
+  const schemaVersion = options.schemaVersion || SESSION_STORE_VERSION;
+  const file = path.join(dataHome, options.fileName || "codex-acp-sessions.json");
   function read() {
     try {
       const value = JSON.parse(fs.readFileSync(file, "utf8"));
-      return value?.schema_version === SESSION_STORE_VERSION && Array.isArray(value.sessions)
+      return value?.schema_version === schemaVersion && Array.isArray(value.sessions)
         ? value
-        : { schema_version: SESSION_STORE_VERSION, sessions: [] };
+        : { schema_version: schemaVersion, sessions: [] };
     } catch {
-      return { schema_version: SESSION_STORE_VERSION, sessions: [] };
+      return { schema_version: schemaVersion, sessions: [] };
     }
   }
   function write(document) {
@@ -96,6 +101,7 @@ function createCodexAcpClient(options = {}) {
   const resolveAgentPath = options.resolveAgentPath || (() => require.resolve("@agentclientprotocol/codex-acp"));
   const sessionStore = options.sessionStore || createSessionStore(path.resolve(options.dataHome || process.cwd()));
   const sessions = new Map();
+  const pendingSessionSelections = new Map();
   let stopped = false;
 
   function notify() {
@@ -178,11 +184,30 @@ function createCodexAcpClient(options = {}) {
       });
       return;
     }
-    if (message.method !== "session/update" || message.params?.sessionId !== entry.sessionId || entry.restoring) return;
+    if (message.method !== "session/update" || message.params?.sessionId !== entry.sessionId) return;
+    if (entry.restoring) {
+      if (entry.captureHistory) captureHistoryUpdate(entry, message.params.update);
+      return;
+    }
     const summary = updateSummary(message.params.update);
     if (!summary) return;
     if (summary.kind === "text") setEntry(entry, { output: clipped(`${entry.output}${summary.text}`), activity: "Agent 正在回复" });
     else setEntry(entry, { activity: clipped(summary.text, 300) });
+  }
+
+  function captureHistoryUpdate(entry, update) {
+    const role = update?.sessionUpdate === "user_message_chunk"
+      ? "user"
+      : update?.sessionUpdate === "agent_message_chunk" ? "assistant" : null;
+    if (!role || update.content?.type !== "text" || !update.content.text) return;
+    const explicitKey = update.messageId ? `${role}:${update.messageId}` : null;
+    const key = explicitKey || (entry.historyRole === role ? entry.historyKey : `${role}:${++entry.historySequence}`);
+    const last = entry.messages.at(-1);
+    if (last && entry.historyKey === key) last.text = clipped(`${last.text}${update.content.text}`, 1000);
+    else entry.messages.push({ role, text: clipped(update.content.text, 1000), at: new Date().toISOString() });
+    entry.historyRole = role;
+    entry.historyKey = key;
+    if (entry.messages.length > 12) entry.messages.splice(0, entry.messages.length - 12);
   }
 
   function attachOutput(entry) {
@@ -235,17 +260,25 @@ function createCodexAcpClient(options = {}) {
       clientInfo: { name: "wuxing-harness-companion", version: "0.1.0" }
     });
     if (initialized?.protocolVersion !== PROTOCOL_VERSION) throw new Error("codex-acp-protocol-mismatch");
-    const saved = sessionStore.get(entry.workspace);
+    const selection = pendingSessionSelections.get(entry.workspace) || null;
+    pendingSessionSelections.delete(entry.workspace);
+    const saved = selection
+      ? { session_id: selection.sessionId, messages: [] }
+      : sessionStore.get(entry.workspace);
     const canResume = initialized?.agentCapabilities?.sessionCapabilities?.resume !== undefined;
     const canLoad = initialized?.agentCapabilities?.loadSession === true;
+    const forceLoad = Boolean(selection);
     let resumed = false;
     if (saved?.session_id && (canResume || canLoad)) {
       entry.sessionId = saved.session_id;
       entry.messages = Array.isArray(saved.messages) ? saved.messages.slice(-12) : [];
       entry.restoring = true;
+      entry.captureHistory = forceLoad && canLoad;
       try {
         const params = { sessionId: saved.session_id, cwd: entry.workspace, mcpServers: [] };
-        if (canResume) {
+        if (forceLoad && canLoad) {
+          await request(entry, "session/load", params);
+        } else if (canResume) {
           try {
             await request(entry, "session/resume", params);
           } catch (resumeError) {
@@ -260,6 +293,9 @@ function createCodexAcpClient(options = {}) {
         throw new Error(`codex-acp-session-restore-failed:${saved.session_id}:${error.message}`);
       } finally {
         entry.restoring = false;
+        entry.captureHistory = false;
+        entry.historyKey = null;
+        entry.historyRole = null;
       }
     }
     if (!entry.sessionId) {
@@ -296,6 +332,10 @@ function createCodexAcpClient(options = {}) {
       child: null,
       closing: false,
       restoring: false,
+      captureHistory: false,
+      historyKey: null,
+      historyRole: null,
+      historySequence: 0,
       running: null
     };
     sessions.set(normalized, entry);
@@ -376,6 +416,63 @@ function createCodexAcpClient(options = {}) {
     return publicState(entry);
   }
 
+  async function resetSession(workspace) {
+    const normalized = path.resolve(workspace);
+    const existing = sessions.get(normalized);
+    if (existing?.running && existing.status === "streaming") throw new Error("codex-acp-prompt-in-progress");
+    if (existing?.running) {
+      try { await existing.running; } catch { /* A completed failed turn may still be settling. */ }
+    }
+    if (existing) {
+      existing.closing = true;
+      rejectPending(existing, new Error("codex-acp-session-reset"));
+      try { existing.child?.kill(); } catch { /* The ACP process has already exited. */ }
+      sessions.delete(normalized);
+    }
+    sessionStore.remove(normalized);
+    notify();
+    const entry = await ensureSession(normalized);
+    return publicState(entry);
+  }
+
+  async function listSessions(workspace) {
+    const normalized = path.resolve(workspace);
+    const entry = await ensureSession(normalized);
+    if (entry.running && entry.status === "streaming") throw new Error("codex-acp-prompt-in-progress");
+    const response = await request(entry, "session/list", { cwd: normalized, cursor: null });
+    return (response?.sessions || [])
+      .filter((item) => item?.sessionId && item?.cwd && sameWorkspace(item.cwd, normalized))
+      .map((item) => ({
+        session_id: String(item.sessionId),
+        workspace: path.resolve(item.cwd),
+        title: String(item.title || "未命名对话").replace(/\s+/g, " ").trim().slice(0, 80),
+        updated_at: item.updatedAt || null
+      }));
+  }
+
+  async function switchSession(workspace, sessionId) {
+    const normalized = path.resolve(workspace);
+    const selectedId = String(sessionId || "").trim();
+    if (!selectedId) throw new Error("codex-acp-session-id-invalid");
+    const available = await listSessions(normalized);
+    if (!available.some((item) => item.session_id === selectedId)) throw new Error("codex-acp-session-not-found");
+    const existing = sessions.get(normalized);
+    if (existing?.running && existing.status === "streaming") throw new Error("codex-acp-prompt-in-progress");
+    if (existing?.running) {
+      try { await existing.running; } catch { /* A completed failed turn may still be settling. */ }
+    }
+    if (existing) {
+      existing.closing = true;
+      rejectPending(existing, new Error("codex-acp-session-switch"));
+      try { existing.child?.kill(); } catch { /* The ACP process has already exited. */ }
+      sessions.delete(normalized);
+    }
+    pendingSessionSelections.set(normalized, { sessionId: selectedId });
+    notify();
+    const entry = await ensureSession(normalized);
+    return publicState(entry);
+  }
+
   function stop() {
     stopped = true;
     for (const entry of sessions.values()) {
@@ -386,7 +483,7 @@ function createCodexAcpClient(options = {}) {
     sessions.clear();
   }
 
-  return { connect, runPrompt, stateFor, stop };
+  return { connect, listSessions, resetSession, runPrompt, stateFor, stop, switchSession };
 }
 
 module.exports = { MAX_OUTPUT_CHARS, PROTOCOL_VERSION, SESSION_STORE_VERSION, childEnvironment, createCodexAcpClient, createSessionStore, permissionOutcome, updateSummary };

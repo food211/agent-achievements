@@ -23,7 +23,10 @@ button, textarea { font: inherit; }
 .chat header small,.chat header b { display:block; }
 .chat header small { max-width:260px; overflow:hidden; color:#87a493; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
 .chat header b { margin-top:2px; font-family:Georgia,"Microsoft YaHei",serif; font-size:15px; }
+.header-actions { display:flex; gap:6px; }
 .chat header button { width:25px; height:25px; padding:0; color:#9faaa3; border:1px solid rgba(255,255,255,.1); border-radius:50%; background:rgba(255,255,255,.04); cursor:pointer; }
+.chat header button:hover { color:#dce8e0; border-color:rgba(112,177,142,.4); background:rgba(82,147,112,.16); }
+#new-conversation { font-size:18px; line-height:1; }
 .messages { min-height:0; padding-right:3px; display:flex; flex-direction:column; gap:7px; overflow-y:auto; user-select:text; }
 .messages::-webkit-scrollbar { width:5px; }.messages::-webkit-scrollbar-thumb { border-radius:5px; background:rgba(132,166,145,.3); }
 .message { max-width:88%; padding:7px 9px; border-radius:12px 12px 12px 4px; background:rgba(255,255,255,.06); }

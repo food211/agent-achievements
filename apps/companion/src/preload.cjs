@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld("agentCompanion", {
   setAutostart: (enabled) => ipcRenderer.invoke("companion:set-autostart", Boolean(enabled)),
   getAlwaysOnTop: () => ipcRenderer.invoke("companion:get-always-on-top"),
   setAlwaysOnTop: (enabled) => ipcRenderer.invoke("companion:set-always-on-top", Boolean(enabled)),
-  setFocusWorkspace: (agentId, workspace) => ipcRenderer.invoke("companion:set-focus-workspace", agentId, workspace),
+  setFocusWorkspace: (agentId, workspace, runtimeId) => ipcRenderer.invoke("companion:set-focus-workspace", agentId, workspace, runtimeId),
   requestWuxingDiagnostic: () => ipcRenderer.invoke("companion:request-wuxing-diagnostic"),
   sendAgentMessage: (text) => ipcRenderer.invoke("companion:send-agent-message", text),
   saveAchievement: (input) => ipcRenderer.invoke("companion:save-achievement", input),
