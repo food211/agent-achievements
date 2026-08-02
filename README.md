@@ -104,12 +104,12 @@ npm run wuxing
 
 ## 安装到任何 Code Agent
 
-五行闭环包含两个相邻的 Skill：`wuxing-harness` 负责规则审查，`use-agent-achievements` 负责成就协议和 Agent 上下文。默认安装到跨客户端约定的 `~/.agents/skills`：
+下午演示的公开安装只包含 `wuxing-harness` Skill。它负责扫描仓库规则、逐步访谈、保存问题和人的判断，不依赖桌面助手、长连接或成就系统才能运行。默认安装到跨客户端约定的 `~/.agents/skills`：
 
 只需要把下面这段话发给当前 Coding Agent。后续初始化、首次诊断、成果回顾、默认挑战和连接验证都由它完成，不再让用户手动创建、追踪或申领成就：
 
 ```text
-请安装 https://github.com/food211/harness-assistant 中的五行助手。读取 docs/code-agent-adapter-contract.md，识别你的 Skills 或规则目录、当前工作区、稳定身份和真实生命周期能力，然后安装 wuxing-harness 与 use-agent-achievements。运行自动 bootstrap，识别并执行 ensure_companion_running、ensure_agent_bridge、run_wuxing_diagnostic、diagnose_past_achievements 四个动作。让桌面助手和 agent-bridge.mjs 脱离终端常驻，并把 bridge 恢复接到你真实可用的启动 Hook；没有 Hook 时，在每次新会话第一轮自动探测并恢复。验证 bridge 已连接、后续任务会自动读取激励上下文、记录完成结果、由 report 建立申请并接收新挑战。不要让我再执行初始化、启动连接、创建、追踪或申领步骤；没有后台唤醒能力时如实说明，但不要把长连接交给我手动维护。
+请安装 https://github.com/food211/harness-assistant 中的 wuxing-harness Skill。识别你的 Skills 目录和当前工作区，只安装 skills/wuxing-harness，然后运行 harness-cli.mjs init 与 coach-start。先扫描当前仓库实际生效的 Skill、模板、规则和提示词，再按“开发创作者 → 技术判据 → 边界”一次只问一个问题。不要安装或启动桌面助手，也不要要求我配置长连接。
 ```
 
 Agent 可以调用仓库提供的底层安装器。默认目标是 `~/.agents/skills`：
@@ -130,11 +130,13 @@ npm run install:skills -- --target <agent-skills-directory>
 npm run install:skills -- --project <workspace-directory>
 ```
 
-安装器可以同时接收多个 `--target`，并用 `--workspace`、`--agent`、`--runtime` 和重复的 `--capability` 完成初始化。它不会静默覆盖已经被修改的 Skill；确认替换时显式加 `--force`。
+安装器可以同时接收多个 `--target`，并用 `--workspace` 完成初始化。它不会静默覆盖已经被修改的 Skill；确认替换时显式加 `--force`。
 
 完整的宿主适配边界见 [Code Agent 自适配安装契约](./docs/code-agent-adapter-contract.md)。我们提供稳定接口，不在仓库里硬编码每一种 Code Agent 的目录、Hook 和权限配置。
 
-安装器会自动执行幂等 `bootstrap`，初始化 `.agent-achievements` 和当前工作区的 `.wuxing-harness/state.json`，登记默认五行挑战，并返回四个 Agent 动作：启动桌面助手、启动 Agent 长连接、规则健康诊断、过往成果回顾。底层安装器会把这些动作明确标为 pending；执行安装的 Agent 只有在逐项完成或如实保留不可执行项后，才应宣布适配完成，用户不用打开终端。源码安装目前从保留的仓库目录启动桌面助手，因此不能在启动完成前删除仓库。Harness 只记录规则、证据和人的判断，不会在获得批准前修改需要人决策的规则文件。
+安装器会初始化当前工作区的 `.wuxing-harness/state.json` 和 `harness.db`，然后交给安装 Agent 开始规则健康诊断。Harness 只记录规则、证据和人的判断，不会在获得批准前修改需要人决策的规则文件。
+
+成就系统和桌面助手保留为可选扩展，不属于下午演示的安装路径。需要成就协议时可显式增加 `--with-achievements`；桌面助手继续仅用于本机展示。
 
 桌面助手把本地端点和随机令牌写入 `~/.agent-achievements/connection.json`。Bridge 只接受 loopback 地址，会维持心跳、在助手重启或令牌变化后自动重连，并把连接状态写入 `bridges/`、把推送给 Agent 的上下文写入 `agent-inbox.json`。令牌不会进入提示词或成就证据。宿主提供可信启动 Hook 时，Hook 会在首个任务前先恢复桌面助手，再恢复 bridge；没有 Hook 时，新会话第一轮自动恢复。长连接可以常驻，但不能替一个已经停止且没有后台唤醒能力的 Agent 执行任务。
 

@@ -9,10 +9,11 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(here, "..");
-const skillNames = ["wuxing-harness", "use-agent-achievements"];
 const argv = process.argv.slice(2);
 const force = argv.includes("--force");
 const dryRun = argv.includes("--dry-run");
+const withAchievements = argv.includes("--with-achievements");
+const skillNames = withAchievements ? ["wuxing-harness", "use-agent-achievements"] : ["wuxing-harness"];
 
 function values(name) {
   const result = [];
@@ -49,6 +50,7 @@ function help() {
   process.stdout.write(`  --runtime <id>         Truthful host runtime identifier.\n`);
   process.stdout.write(`  --capability <name>    Host capability discovered by the Agent. Repeatable.\n`);
   process.stdout.write(`  --data-home <dir>      Override the shared achievement state directory.\n`);
+  process.stdout.write(`  --with-achievements    Also install the optional achievement integration Skill.\n`);
   process.stdout.write(`  --force                Replace an existing modified installation.\n`);
   process.stdout.write(`  --dry-run              Report destinations without writing files.\n`);
   process.stdout.write(`  --help                 Show this help.\n\n`);
@@ -135,18 +137,7 @@ function runJson(script, arguments_, environment = process.env) {
 }
 
 async function activate(targetRoot, workspace, identity, capabilities, environment) {
-  const achievementCli = path.join(targetRoot, "use-agent-achievements", "scripts", "achievement-cli.mjs");
   const harnessCli = path.join(targetRoot, "wuxing-harness", "scripts", "harness-cli.mjs");
-  const bootstrapArgs = [
-    "bootstrap",
-    "--agent", identity.agent_id,
-    "--runtime", identity.runtime_id,
-    "--workspace", workspace,
-    "--companion-root", repositoryRoot
-  ];
-  for (const capability of capabilities) bootstrapArgs.push("--capability", capability);
-  const achievementBootstrap = runJson(achievementCli, bootstrapArgs, environment);
-
   const harnessHome = path.resolve(environment.WUXING_HARNESS_HOME || path.join(workspace, ".wuxing-harness"));
   const harnessStatePath = path.join(harnessHome, "state.json");
   let harnessInitialization;
@@ -157,8 +148,27 @@ async function activate(targetRoot, workspace, identity, capabilities, environme
     harnessInitialization = runJson(harnessCli, ["init", "--workspace", workspace, "--agent", identity.agent_id], environment);
   }
 
-  const agentNextActions = achievementBootstrap.agent_next_actions || achievementBootstrap.data?.agent_next_actions || [];
-  if (achievementBootstrap.data?.adapter?.created) {
+  let achievementBootstrap = null;
+  let agentNextActions = [{
+    action_id: `run-wuxing-diagnostic:${workspace}`,
+    action: "run_wuxing_diagnostic",
+    status: "pending",
+    workspace,
+    instructions: "加载 wuxing-harness Skill，先扫描当前仓库规则，再按三段式教练访谈逐步诊断。"
+  }];
+  if (withAchievements) {
+    const achievementCli = path.join(targetRoot, "use-agent-achievements", "scripts", "achievement-cli.mjs");
+    const bootstrapArgs = [
+      "bootstrap",
+      "--agent", identity.agent_id,
+      "--runtime", identity.runtime_id,
+      "--workspace", workspace
+    ];
+    for (const capability of capabilities) bootstrapArgs.push("--capability", capability);
+    achievementBootstrap = runJson(achievementCli, bootstrapArgs, environment);
+    agentNextActions = achievementBootstrap.agent_next_actions || achievementBootstrap.data?.agent_next_actions || [];
+  }
+  if (achievementBootstrap?.data?.adapter?.created) {
     for (const requiredAction of [
       "run_wuxing_diagnostic",
       "diagnose_past_achievements"
@@ -174,7 +184,7 @@ async function activate(targetRoot, workspace, identity, capabilities, environme
     skills_root: targetRoot,
     identity,
     capabilities,
-    achievement_bootstrap: achievementBootstrap.data || achievementBootstrap,
+    achievement_bootstrap: achievementBootstrap ? (achievementBootstrap.data || achievementBootstrap) : null,
     wuxing_harness: harnessInitialization,
     agent_next_actions: agentNextActions,
     user_next_actions: []
@@ -228,8 +238,9 @@ process.stdout.write(`${JSON.stringify({
   standard: "Agent Skills",
   targets,
   installations,
+  achievements_included: withAchievements,
   companion_dependency: false,
-  companion_distribution: "source_repository",
+  companion_distribution: "not_included",
   runtime_adapters_optional: true,
   adapter_contract: path.join(repositoryRoot, "docs", "code-agent-adapter-contract.md"),
   bootstrap_automatic: true,
